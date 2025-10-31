@@ -1,0 +1,5 @@
+? ahh
+color:color= #ffffff
+asda:color=  (0,31,31)
+size:number= 421.0121323
+hello:text= ADSAJDAOIJDOISANODJ
