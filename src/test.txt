@@ -1,5 +1,9 @@
-? ahh
-color: #ffffff
-asda: (0,31,31)
+!! ahh : 
+This is a cool this look : AHADSJ : ASDA :  asda
+color : "Hello "world !"
+your_mom   :  no
+your_dad   :  yes
+color: #ffff00 !!
+color1: (255,255,255)
 size: 421.0121323
 hello: ADSAJDAOIJDOISANODJ

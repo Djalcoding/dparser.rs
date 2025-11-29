@@ -1,11 +1,12 @@
-use djal_parser::parse::parse_file;
+use std::io;
 
+use djal_parser::{datastructure::ParsedData};
 
-fn main() {
-    let s = parse_file(&String::from("/home/bert/Projects/RustProjects/djal_parser/src/test.txt")).unwrap();
-    for v in s {
-        println!("{v}");
-    }
-    
+fn main() -> io::Result<()> {
+    let path = String::from("/home/bert/Projects/RustProjects/djal_parser/src/test.txt");
 
+    let s = ParsedData::from_file(&path)?;
+
+    println!("{}", s.as_color(&String::from("color")).unwrap());
+    Ok(())
 }
