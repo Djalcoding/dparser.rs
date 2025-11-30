@@ -4,7 +4,10 @@ mod read;
 pub mod datastructure {
     use std::{collections::HashMap, io::Error};
 
-    use crate::{color::Color, parse::{Entry, parse_file}};
+    use crate::{
+        color::Color,
+        parse::{Entry, parse_file},
+    };
     pub struct ParsedData {
         map: HashMap<String, String>,
     }
@@ -26,7 +29,11 @@ pub mod datastructure {
         }
 
         pub fn as_raw(&self, key: &String) -> Result<String, Error> {
-            let modified_key = key.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_lowercase();
+            let modified_key = key
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect::<String>()
+                .to_lowercase();
             let entry = self.map.get(&modified_key);
             if entry.is_none() {
                 return Err(Error::new(
@@ -66,34 +73,42 @@ pub mod datastructure {
             f64_from_string(&raw)
         }
 
-        pub fn as_boolean(&self, key:&String) -> Result<bool, Error> {
+        pub fn as_boolean(&self, key: &String) -> Result<bool, Error> {
             let raw = self.as_raw(key)?.to_lowercase();
-            let yes:bool = raw == "yes" || raw == "y" || raw == "true" || raw == "1";
-            let no:bool = raw == "no" || raw == "n" || raw == "false" || raw == "0";
-            
+            let yes: bool = raw == "yes" || raw == "y" || raw == "true" || raw == "1";
+            let no: bool = raw == "no" || raw == "n" || raw == "false" || raw == "0";
+
             if !no && !yes {
-                return Err(Error::new(std::io::ErrorKind::InvalidInput, "Invalide boolean symbol"));
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalide boolean symbol",
+                ));
             }
             Ok(yes)
-
         }
 
-        pub fn as_color(&self, key:&String)-> Result<Color, Error> {
+        pub fn as_color(&self, key: &String) -> Result<Color, Error> {
             let raw = self.as_raw(key)?;
             let rgb = Color::from_rgb_string(&raw);
             let hexadecimal = Color::from_hexadecimal(&raw);
+            let text = Color::from_color_string(&raw);
 
             if let Ok(color) = rgb {
                 return Ok(color);
+            } else if let Ok(color) = hexadecimal {
+                return Ok(color);
+            } else if let Ok(color) = text {
+                return Ok(color);
             }
-            else if let Ok(color) = hexadecimal {
-                return Ok(color); 
-            }
-            else if let Err(color) = rgb {
-                return Err(color);
-            }
-            
-            Err(Error::new(std::io::ErrorKind::InvalidInput, hexadecimal.err().unwrap().to_string()))
+            Err(Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "{} or {} or {}",
+                    hexadecimal.err().unwrap(),
+                    rgb.err().unwrap(),
+                    text.err().unwrap()
+                ),
+            ))
         }
     }
 
@@ -149,6 +164,23 @@ mod color {
             }
         }
 
+        pub fn from_color_string(string: &String) -> Result<Self, Error> {
+            match string.to_lowercase().as_str() {
+                "red" => Ok(Color::rgb(255, 0, 0)),
+                "green" => Ok(Color::rgb(0, 255, 0)),
+                "blue" => Ok(Color::rgb(0, 0, 255)),
+                "white" => Ok(Color::rgb(255, 255, 255)),
+                "black" => Ok(Color::rgb(0, 0, 0)),
+                "yellow" => Ok(Color::rgb(255, 255, 0)),
+                "purple" => Ok(Color::rgb(255, 0, 255)),
+                "cyan" => Ok(Color::rgb(0, 255, 255)),
+                _ => Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("'{string}' is not a recognized color"),
+                )),
+            }
+        }
+
         pub fn from_rgb_string(string: &String) -> Result<Self, Error> {
             let mut decode: Vec<u8> = Vec::new();
             for color in string
@@ -169,7 +201,10 @@ mod color {
                 decode.push(num as u8);
             }
             if decode.len() < 3 {
-                return Err(Error::new(std::io::ErrorKind::InvalidInput, "less than 3 arguments for color definition")) ;
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "less than 3 arguments for color definition",
+                ));
             }
             Ok(Color::rgb(decode[0], decode[1], decode[2]))
         }
@@ -203,7 +238,14 @@ mod color {
 
     impl Display for Color {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f,"r: {}, g: {}, b: {}, hex: {}",self.red(),self.green(), self.blue(), self.hexadecimal_value()) 
-        } 
+            write!(
+                f,
+                "r: {}, g: {}, b: {}, hex: {}",
+                self.red(),
+                self.green(),
+                self.blue(),
+                self.hexadecimal_value()
+            )
+        }
     }
 }
