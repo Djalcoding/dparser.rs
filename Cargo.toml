@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 description = "A library to parse configuration files"
 license = "GPL-2.0-or-later WITH Bison-exception-2.2"
+readme = "crateREADME.md"
+repository = "https://github.com/Djalcoding/dparser.rs"
 
 [dependencies]
 hex = "0.4.3"
