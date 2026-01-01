@@ -51,4 +51,5 @@ cargo add djal_parser
 ```
 
 ## Notes
-for more information on how to make files or use the library, go check the documentation on (placeholder)
+for more information on how to make files or use the library, go check the documentation on [https://docs.rs/djal_parser/0.1.0/djal_parser/]
+
