@@ -2,7 +2,7 @@
 
 # dparser.rs
 ![Release](https://img.shields.io/github/downloads/Djalcoding/dparser.rs/total?style=flat-square) <br>
-A Rust library for parsing .dconfig files 
+A Rust library for parsing configuration files 
 <div align="left">
 
 ```dconfig
@@ -52,4 +52,5 @@ cargo add djal_parser
 
 ## Notes
 for more information on how to make files or use the library, go check the documentation on [https://docs.rs/djal_parser/0.1.0/djal_parser/]
+
 
