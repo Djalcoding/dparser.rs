@@ -1,7 +1,47 @@
-//! This crate implements a way of parsing text files and interpreting them
-//! as different datatypes.
+//! This crate implements a way of parsing configuration files and interpreting them as different datatypes.
+//! You should be using the provided datastructure [`datastructure::ParsedData`] to retrieve
+//! elements inside of your configuration file.
+//!
+//! # How to write configuration file
+//!   - "!!" represents comments and may be inline.
+//!   - Each field must be defined with a name and a value, seperated with a colon
+//!   - Supported types are :
+//!     - Strings
+//!     - 64 bit precision floating point numbers
+//!     - Colors (Represented with a name, an hexadecimal string or rgb values)
+//!     - Booleans 
+//! # Example
+//!     !! This is documentation. 
+//!         !! This is a number
+//!     number1: 12.643
+//!         !! This is also a number
+//!     number2: -12
+//!         !! This is a color as an rgb string
+//!     color1: (0,255,0)
+//!         !! This is a color as an hexadecimal color
+//!     color2: #FFFFFF
+//!         !! This is a color represented with a name
+//!     color3: red
+//!         !! This is text
+//!     text: "Lorem Ipsum"
+//!         !! Those is are booleans
+//!     bool1 = yes
+//!     bool2 = y
+//!     bool2 = true
+//!     bool3 = 1 !! Note that this doesn't work for every number, only 1
+//!     bool1 = no
+//!     bool2 = n
+//!     bool2 = false
+//!     bool3 = 0
+//! # Rust Code Example
+//! ```
+//! let path = Path::new("djal_parser/src/example_config_file.dconfig");
+//! let parsed_data_map = ParsedData::from_file(path).unwrap();
+//! assert_eq(parsedDataMap.as_text("Hello, World !"), Ok("Hello, World !"))  
+//! ```
+pub mod color;
 pub mod error_handling;
-pub mod parse;
+mod parse;
 mod read;
 
 pub mod datastructure {
@@ -9,7 +49,6 @@ pub mod datastructure {
     //! This module implements a data structure to easily retrieve and interpret data from a parsed
     //! text file
     use std::{collections::HashMap, path::Path};
-
     use crate::{
         color::Color,
         error_handling::{FileReadingError, ParsingError},
@@ -39,22 +78,8 @@ pub mod datastructure {
             ))
         }
 
-        fn from_entries(path: &str, entries: Vec<Entry>) -> Self {
-            let mut map: HashMap<String, (usize, String)> = HashMap::new();
-
-            for entry in entries {
-                map.insert(
-                    String::from(entry.name()),
-                    (entry.line_number(), String::from(entry.content())),
-                );
-            }
-
-            Self {
-                file: path.to_string(),
-                map,
-            }
-        }
-
+        /// Returns the raw data from a key inside of the text file, along with its line number
+        /// This can also return a FileReadingError if the key isn't present in the file.
         pub fn as_raw(&self, key: &str) -> Result<(usize, String), FileReadingError> {
             let modified_key = key
                 .chars()
@@ -72,6 +97,9 @@ pub mod datastructure {
             Ok(entry.unwrap().clone())
         }
 
+        /// Returns data interpreted as a piece of text from a key inside of the text file.
+        /// This can also return a FileReadingError if the key isn't present in the file, too many
+        /// quotes are present or if the value if empty.
         pub fn as_text(&self, key: &str) -> Result<String, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
             let mut in_text: bool = false;
@@ -90,7 +118,7 @@ pub mod datastructure {
             if quote_count > 2 {
                 return Err(FileReadingError::from(ParsingError::new(
                     self.file.to_string(),
-                    format!("Too many double quotes are present on key {key}"),
+                    format!("Too many double quotes are present value of key '{key}'"),
                     line,
                 )));
             } else if s.is_empty() {
@@ -103,11 +131,22 @@ pub mod datastructure {
             Ok(s)
         }
 
+        /// Returns data interpreted as f64 from a key inside of the text file.
+        /// This can also return a FileReadingError if the key isn't present in the file or if
+        /// non-numeric character is inside of the value
         pub fn as_number(&self, key: &str) -> Result<f64, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
             Ok(f64_from_string(self.file.to_string(), line, &raw)?)
         }
 
+        /// Returns data interpreted as boolean from a key inside of the text file.
+        /// This can also return a FileReadingError if the key isn't present in the file or if
+        /// an unrecognized symbol is the value.
+        /// ## Note
+        /// the recognized symbols are :
+        ///   - 'yes', 'y', 'true' and '1' for true,
+        ///   - 'no', 'n', 'false' and '0' for false.
+        /// They are case insensitive
         pub fn as_boolean(&self, key: &str) -> Result<bool, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
             let lower_raw = raw.to_lowercase();
@@ -127,6 +166,12 @@ pub mod datastructure {
             Ok(yes)
         }
 
+        /// Returns data interpreted as Color from a key inside of the text file.
+        /// This can also return a FileReadingError if the key isn't present in the file or if
+        /// the raw data cannot be parsed as a color as an rgb value, an hexadecimal or a color
+        /// name
+        /// [See Also]
+        /// [`Color`] for more information
         pub fn as_color(&self, key: &str) -> Result<Color, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
             let rgb = Color::from_rgb_string(&raw);
@@ -146,19 +191,39 @@ pub mod datastructure {
                 line,
             )))
         }
+        fn from_entries(path: &str, entries: Vec<Entry>) -> Self {
+            let mut map: HashMap<String, (usize, String)> = HashMap::new();
+
+            for entry in entries {
+                map.insert(
+                    String::from(entry.name()),
+                    (entry.line_number(), String::from(entry.content())),
+                );
+            }
+
+            Self {
+                file: path.to_string(),
+                map,
+            }
+        }
     }
 
     fn f64_from_string(file: String, line: usize, str: &str) -> Result<f64, ParsingError> {
         let mut number: f64 = 0.0;
         let mut decimal: f64 = 1.0;
         let mut decimals: bool = false;
+        let mut negative:bool = false;
         for character in str.chars() {
-            if !character.is_numeric() && character != '.' {
+            if !character.is_numeric() && character != '.' && character != '-'{
                 return Err(ParsingError::new(
                     file,
                     String::from("Non numeric character in f64"),
                     line,
                 ));
+            }
+            if(character == '-'){
+                negative =true;
+                continue;
             }
             if !decimals {
                 if character == '.' {
@@ -174,115 +239,9 @@ pub mod datastructure {
             }
             number += num as f64 * decimal;
         }
-
+        if negative{
+            return Ok(-number);
+        }
         Ok(number)
-    }
-}
-
-mod color {
-    use hex::FromHexError;
-    use std::{fmt::Display, io::Error};
-
-    #[derive(Clone)]
-    pub struct Color {
-        r: u8,
-        g: u8,
-        b: u8,
-        hexadecimal: String,
-    }
-
-    impl Color {
-        pub fn rgb(r: u8, g: u8, b: u8) -> Self {
-            Color {
-                r,
-                g,
-                b,
-                hexadecimal: format!("#{r:02x}{g:02x}{b:02x}"),
-            }
-        }
-
-        pub fn from_color_string(string: &String) -> Result<Self, Error> {
-            match string.to_lowercase().as_str() {
-                "red" => Ok(Color::rgb(255, 0, 0)),
-                "green" => Ok(Color::rgb(0, 255, 0)),
-                "blue" => Ok(Color::rgb(0, 0, 255)),
-                "white" => Ok(Color::rgb(255, 255, 255)),
-                "black" => Ok(Color::rgb(0, 0, 0)),
-                "yellow" => Ok(Color::rgb(255, 255, 0)),
-                "purple" => Ok(Color::rgb(255, 0, 255)),
-                "cyan" => Ok(Color::rgb(0, 255, 255)),
-                _ => Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("'{string}' is not a recognized color"),
-                )),
-            }
-        }
-
-        pub fn from_rgb_string(string: &str) -> Result<Self, Error> {
-            let mut decode: Vec<u8> = Vec::new();
-            for color in string
-                .split(|c: char| !c.is_numeric())
-                .filter(|s| !s.is_empty())
-            {
-                let mut num: u16 = 0;
-                for character in color.chars() {
-                    num *= 10;
-                    num += character as u16 - '0' as u16;
-                    if num > 255 {
-                        return Err(Error::new(
-                            std::io::ErrorKind::InvalidInput,
-                            format!("Value over 255 in rgb : {num} at index {}", decode.len()),
-                        ));
-                    }
-                }
-                decode.push(num as u8);
-            }
-            if decode.len() < 3 {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "less than 3 arguments for color definition",
-                ));
-            }
-            Ok(Color::rgb(decode[0], decode[1], decode[2]))
-        }
-
-        pub fn from_hexadecimal(hexadecimal_color: &String) -> Result<Self, FromHexError> {
-            let mut color: String = hexadecimal_color.to_string();
-            if hexadecimal_color.starts_with("#") {
-                color = hexadecimal_color.chars().filter(|c| *c != '#').collect();
-            }
-            let decode = hex::decode(&color)?;
-
-            Ok(Color::rgb(decode[0], decode[1], decode[2]))
-        }
-
-        pub fn red(&self) -> u8 {
-            self.r
-        }
-
-        pub fn green(&self) -> u8 {
-            self.g
-        }
-
-        pub fn blue(&self) -> u8 {
-            self.b
-        }
-
-        pub fn hexadecimal_value(&self) -> &String {
-            &self.hexadecimal
-        }
-    }
-
-    impl Display for Color {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "r: {}, g: {}, b: {}, hex: {}",
-                self.red(),
-                self.green(),
-                self.blue(),
-                self.hexadecimal_value()
-            )
-        }
     }
 }
