@@ -1,54 +1,82 @@
+//! This crate implements a way of parsing text files and interpreting them
+//! as different datatypes.
+pub mod error_handling;
 pub mod parse;
 mod read;
 
 pub mod datastructure {
-    use std::{collections::HashMap, io::Error};
+
+    //! This module implements a data structure to easily retrieve and interpret data from a parsed
+    //! text file
+    use std::{collections::HashMap, path::Path};
 
     use crate::{
         color::Color,
+        error_handling::{FileReadingError, ParsingError},
         parse::{Entry, parse_file},
     };
+    /// This is the data structure used to retrive and interpret data from a parsed text file, this
+    /// is implemented as a HashMap for constant time retrival
     pub struct ParsedData {
-        map: HashMap<String, String>,
+        file: String,
+        map: HashMap<String, (usize, String)>,
     }
 
     impl ParsedData {
-        pub fn from_file(path: &String) -> Result<Self, Error> {
-            let entries: Vec<Entry> = parse_file(path)?;
-            Ok(ParsedData::from_entries(entries))
+        /// ## Arguments
+        ///
+        /// Create a new ParsedData from a filepath (`path`) provided as a String.
+        ///
+        /// ## Return type
+        ///
+        /// Returns a Result<ParsedData, Error>.
+        /// This will result in an error if the file cannot be properly parsed.
+        pub fn from_file(path: &Path) -> Result<Self, FileReadingError> {
+            let entries: Vec<Entry> = parse_file(&path.display().to_string())?;
+            Ok(ParsedData::from_entries(
+                &path.display().to_string(),
+                entries,
+            ))
         }
 
-        fn from_entries(entries: Vec<Entry>) -> Self {
-            let mut map: HashMap<String, String> = HashMap::new();
+        fn from_entries(path: &str, entries: Vec<Entry>) -> Self {
+            let mut map: HashMap<String, (usize, String)> = HashMap::new();
 
             for entry in entries {
-                map.insert(String::from(entry.name()), String::from(entry.content()));
+                map.insert(
+                    String::from(entry.name()),
+                    (entry.line_number(), String::from(entry.content())),
+                );
             }
 
-            Self { map }
+            Self {
+                file: path.to_string(),
+                map,
+            }
         }
 
-        pub fn as_raw(&self, key: &String) -> Result<String, Error> {
+        pub fn as_raw(&self, key: &str) -> Result<(usize, String), FileReadingError> {
             let modified_key = key
                 .chars()
                 .filter(|c| c.is_alphanumeric())
                 .collect::<String>()
                 .to_lowercase();
+
             let entry = self.map.get(&modified_key);
             if entry.is_none() {
-                return Err(Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("The key {key} wasn't defined"),
+                return Err(FileReadingError::new(
+                    self.file.to_string(),
+                    format!("key '{key}' could not be found inside of the file"),
                 ));
             }
-            Ok(String::from(entry.unwrap()))
+            Ok(entry.unwrap().clone())
         }
 
-        pub fn as_text(&self, key: &String) -> Result<String, Error> {
-            let raw = self.as_raw(key)?;
+        pub fn as_text(&self, key: &str) -> Result<String, FileReadingError> {
+            let (line, raw) = self.as_raw(key)?;
             let mut in_text: bool = false;
             let mut quote_count: u16 = 0;
-            let s = raw
+            let s: String = raw
                 .chars()
                 .filter(|c| {
                     if *c == '"' {
@@ -60,35 +88,47 @@ pub mod datastructure {
                 })
                 .collect();
             if quote_count > 2 {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "More than two quotation marks in text",
-                ));
+                return Err(FileReadingError::from(ParsingError::new(
+                    self.file.to_string(),
+                    format!("Too many double quotes are present on key {key}"),
+                    line,
+                )));
+            } else if s.is_empty() {
+                return Err(FileReadingError::from(ParsingError::new(
+                    self.file.to_string(),
+                    format!("no value was specified for key {key} (try inserting quotes)"),
+                    line,
+                )));
             }
             Ok(s)
         }
 
-        pub fn as_number(&self, key: &String) -> Result<f64, Error> {
-            let raw = self.as_raw(key)?;
-            f64_from_string(&raw)
+        pub fn as_number(&self, key: &str) -> Result<f64, FileReadingError> {
+            let (line, raw) = self.as_raw(key)?;
+            Ok(f64_from_string(self.file.to_string(), line, &raw)?)
         }
 
-        pub fn as_boolean(&self, key: &String) -> Result<bool, Error> {
-            let raw = self.as_raw(key)?.to_lowercase();
-            let yes: bool = raw == "yes" || raw == "y" || raw == "true" || raw == "1";
-            let no: bool = raw == "no" || raw == "n" || raw == "false" || raw == "0";
+        pub fn as_boolean(&self, key: &str) -> Result<bool, FileReadingError> {
+            let (line, raw) = self.as_raw(key)?;
+            let lower_raw = raw.to_lowercase();
+
+            let yes: bool =
+                lower_raw == "yes" || lower_raw == "y" || lower_raw == "true" || lower_raw == "1";
+            let no: bool =
+                lower_raw == "no" || lower_raw == "n" || lower_raw == "false" || lower_raw == "0";
 
             if !no && !yes {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Invalide boolean symbol",
-                ));
+                return Err(FileReadingError::from(ParsingError::new(
+                    self.file.to_string(),
+                    format!("Invalid symbol '{raw}' was found"),
+                    line,
+                )));
             }
             Ok(yes)
         }
 
-        pub fn as_color(&self, key: &String) -> Result<Color, Error> {
-            let raw = self.as_raw(key)?;
+        pub fn as_color(&self, key: &str) -> Result<Color, FileReadingError> {
+            let (line, raw) = self.as_raw(key)?;
             let rgb = Color::from_rgb_string(&raw);
             let hexadecimal = Color::from_hexadecimal(&raw);
             let text = Color::from_color_string(&raw);
@@ -100,27 +140,24 @@ pub mod datastructure {
             } else if let Ok(color) = text {
                 return Ok(color);
             }
-            Err(Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!(
-                    "{} or {} or {}",
-                    hexadecimal.err().unwrap(),
-                    rgb.err().unwrap(),
-                    text.err().unwrap()
-                ),
-            ))
+            Err(FileReadingError::from(ParsingError::new(
+                self.file.to_string(),
+                format!("{raw} could not be interpreted as a color"),
+                line,
+            )))
         }
     }
 
-    fn f64_from_string(str: &str) -> Result<f64, Error> {
+    fn f64_from_string(file: String, line: usize, str: &str) -> Result<f64, ParsingError> {
         let mut number: f64 = 0.0;
         let mut decimal: f64 = 1.0;
         let mut decimals: bool = false;
         for character in str.chars() {
             if !character.is_numeric() && character != '.' {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Non numeric character in f64",
+                return Err(ParsingError::new(
+                    file,
+                    String::from("Non numeric character in f64"),
+                    line,
                 ));
             }
             if !decimals {
@@ -181,7 +218,7 @@ mod color {
             }
         }
 
-        pub fn from_rgb_string(string: &String) -> Result<Self, Error> {
+        pub fn from_rgb_string(string: &str) -> Result<Self, Error> {
             let mut decode: Vec<u8> = Vec::new();
             for color in string
                 .split(|c: char| !c.is_numeric())
