@@ -1,6 +1,6 @@
 //! The module that contains the [`Color`] struct 
 use hex::FromHexError;
-use std::{fmt::Display, io::Error};
+use std::{fmt::Display, io::Error, sync::LazyLock};
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
 #[derive(Clone)]
 pub struct Color {
@@ -9,6 +9,7 @@ pub struct Color {
     b: u8,
     hexadecimal: String,
 }
+
 
 impl Default for Color{
     fn default() -> Self {
@@ -125,6 +126,11 @@ impl Color {
     /// Returns the hexadecimal value of the color
     pub fn hexadecimal_value(&self) -> String {
         self.hexadecimal.clone()
+    }
+
+    /// Returns the inverted variant of the color
+    pub fn inverted(&self)->Self {
+        Color::rgb(255-self.r, 255-self.g, 255-self.b)
     }
 }
 
