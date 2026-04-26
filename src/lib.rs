@@ -146,6 +146,7 @@ pub mod datastructure {
         /// the recognized symbols are :
         ///   - 'yes', 'y', 'true' and '1' for true,
         ///   - 'no', 'n', 'false' and '0' for false.
+        ///
         /// They are case insensitive
         pub fn as_boolean(&self, key: &str) -> Result<bool, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
@@ -221,7 +222,7 @@ pub mod datastructure {
                     line,
                 ));
             }
-            if(character == '-'){
+            if character == '-' {
                 negative =true;
                 continue;
             }
