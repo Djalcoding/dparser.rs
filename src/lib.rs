@@ -48,7 +48,7 @@ pub mod datastructure {
 
     //! This module implements a data structure to easily retrieve and interpret data from a parsed
     //! text file
-    use std::{collections::HashMap, path::Path};
+    use std::{cmp::{self, min}, collections::HashMap, path::Path, usize};
     use crate::{
         color::Color,
         error_handling::{FileReadingError, ParsingError},
@@ -102,33 +102,33 @@ pub mod datastructure {
         /// quotes are present or if the value if empty.
         pub fn as_text(&self, key: &str) -> Result<String, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
-            let mut in_text: bool = false;
             let mut quote_count: u16 = 0;
-            let s: String = raw
-                .chars()
-                .filter(|c| {
-                    if *c == '"' {
-                        quote_count += 1;
-                        in_text = !in_text;
-                        return false;
-                    }
-                    in_text
-                })
-                .collect();
-            if quote_count > 2 {
-                return Err(FileReadingError::from(ParsingError::new(
-                    self.file.to_string(),
-                    format!("Too many double quotes are present value of key '{key}'"),
-                    line,
-                )));
-            } else if s.is_empty() {
-                return Err(FileReadingError::from(ParsingError::new(
-                    self.file.to_string(),
-                    format!("no value was specified for key {key} (try inserting quotes)"),
-                    line,
-                )));
+            let mut first_quote:usize = 0xFFFFFFFF;
+            let mut last_quote:usize = 0x0;
+
+            for (i,c) in raw.chars().enumerate() {
+                if c != '"' {
+                     continue; 
+                } 
+                quote_count+=1;
+                first_quote = min(first_quote, i);
+                last_quote = cmp::max(last_quote, i);
             }
-            Ok(s)
+            let trimmed: String = raw
+                .chars()
+                .enumerate()
+                .filter(|(i,_)|{*i > first_quote && *i < last_quote})
+                .map(|(_,c)| {c})
+                .collect();
+
+            if quote_count < 2 {
+                return Err(FileReadingError::from(ParsingError::new(
+                    self.file.to_string(),
+                    format!("There isn't enough double quotes in the value of key '{key}'"),
+                    line,
+                )));
+            }           
+            Ok(trimmed)
         }
 
         /// Returns data interpreted as f64 from a key inside of the text file.
