@@ -10,6 +10,12 @@ pub struct Color {
     hexadecimal: String,
 }
 
+impl Default for Color{
+    fn default() -> Self {
+        Color::rgb(0, 0, 0) 
+    } 
+}
+
 impl Color {
     /// Create a new [`Color`] from a red color value, a green color value and a blue color
     /// value
