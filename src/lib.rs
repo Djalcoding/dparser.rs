@@ -9,9 +9,9 @@
 //!     - Strings
 //!     - 64 bit precision floating point numbers
 //!     - Colors (Represented with a name, an hexadecimal string or rgb values)
-//!     - Booleans 
+//!     - Booleans
 //! # Example
-//!     !! This is documentation. 
+//!     !! This is documentation.
 //!         !! This is a number
 //!     number1: 12.643
 //!         !! This is also a number
@@ -48,20 +48,24 @@ pub mod datastructure {
 
     //! This module implements a data structure to easily retrieve and interpret data from a parsed
     //! text file
-    use std::{cmp::{self, min}, collections::HashMap, path::Path, usize};
     use crate::{
         color::Color,
         error_handling::{FileReadingError, ParsingError},
         parse::{Entry, parse_file},
     };
+    use std::{
+        cmp::{self, min},
+        collections::HashMap,
+        path::Path,
+    };
     /// This is the data structure used to retrive and interpret data from a parsed text file, this
     /// is implemented as a HashMap for constant time retrival
-    pub struct ParsedData {
-        file: String,
+    pub struct ParsedData<'p> {
+        file: &'p Path,
         map: HashMap<String, (usize, String)>,
     }
 
-    impl ParsedData {
+    impl<'p> ParsedData<'p> {
         /// ## Arguments
         ///
         /// Create a new ParsedData from a filepath (`path`) provided as a String.
@@ -70,12 +74,9 @@ pub mod datastructure {
         ///
         /// Returns a Result<ParsedData, Error>.
         /// This will result in an error if the file cannot be properly parsed.
-        pub fn from_file(path: &Path) -> Result<Self, FileReadingError> {
-            let entries: Vec<Entry> = parse_file(&path.display().to_string())?;
-            Ok(ParsedData::from_entries(
-                &path.display().to_string(),
-                entries,
-            ))
+        pub fn from_file(path: &'p Path) -> Result<Self, FileReadingError<'p>> {
+            let entries: Vec<Entry> = parse_file(path)?;
+            Ok(ParsedData::from_entries(path, entries))
         }
 
         /// Returns the raw data from a key inside of the text file, along with its line number
@@ -83,14 +84,14 @@ pub mod datastructure {
         pub fn as_raw(&self, key: &str) -> Result<(usize, String), FileReadingError> {
             let modified_key = key
                 .chars()
-                .filter(|c| c.is_alphanumeric())
+                .filter(|c| c.is_ascii())
                 .collect::<String>()
                 .to_lowercase();
 
             let entry = self.map.get(&modified_key);
             if entry.is_none() {
                 return Err(FileReadingError::new(
-                    self.file.to_string(),
+                    self.file,
                     format!("key '{key}' could not be found inside of the file"),
                 ));
             }
@@ -103,31 +104,33 @@ pub mod datastructure {
         pub fn as_text(&self, key: &str) -> Result<String, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
             let mut quote_count: u16 = 0;
-            let mut first_quote:usize = 0xFFFFFFFF;
-            let mut last_quote:usize = 0x0;
+            let mut first_quote: usize = 0xFFFFFFFF;
+            let mut last_quote: usize = 0x0;
 
-            for (i,c) in raw.chars().enumerate() {
+            for (i, c) in raw.chars().enumerate() {
                 if c != '"' {
-                     continue; 
-                } 
-                quote_count+=1;
+                    continue;
+                }
+                quote_count += 1;
                 first_quote = min(first_quote, i);
                 last_quote = cmp::max(last_quote, i);
             }
             let trimmed: String = raw
                 .chars()
                 .enumerate()
-                .filter(|(i,_)|{*i > first_quote && *i < last_quote})
-                .map(|(_,c)| {c})
+                .filter(|(i, _)| *i > first_quote && *i < last_quote)
+                .map(|(_, c)| c)
                 .collect();
 
             if quote_count < 2 {
-                return Err(FileReadingError::from(ParsingError::new(
-                    self.file.to_string(),
-                    format!("There isn't enough double quotes in the value of key '{key}'"),
-                    line,
-                )));
-            }           
+                return Err(FileReadingError::from_parsing_error(
+                    self.file,
+                    ParsingError::new(
+                        format!("There isn't enough double quotes in the value of key '{key}'"),
+                        line,
+                    ),
+                ));
+            }
             Ok(trimmed)
         }
 
@@ -136,7 +139,15 @@ pub mod datastructure {
         /// non-numeric character is inside of the value
         pub fn as_number(&self, key: &str) -> Result<f64, FileReadingError> {
             let (line, raw) = self.as_raw(key)?;
-            Ok(f64_from_string(self.file.to_string(), line, &raw)?)
+            let result = f64_from_string(line, &raw);
+            if let Ok(value) = result {
+                Ok(value)
+            } else {
+                Err(FileReadingError::from_parsing_error(
+                    self.file,
+                    result.unwrap_err(),
+                ))
+            }
         }
 
         /// Returns data interpreted as boolean from a key inside of the text file.
@@ -158,11 +169,10 @@ pub mod datastructure {
                 lower_raw == "no" || lower_raw == "n" || lower_raw == "false" || lower_raw == "0";
 
             if !no && !yes {
-                return Err(FileReadingError::from(ParsingError::new(
-                    self.file.to_string(),
-                    format!("Invalid symbol '{raw}' was found"),
-                    line,
-                )));
+                return Err(FileReadingError::from_parsing_error(
+                    self.file,
+                    ParsingError::new(format!("Invalid symbol '{raw}' was found"), line),
+                ));
             }
             Ok(yes)
         }
@@ -186,13 +196,12 @@ pub mod datastructure {
             } else if let Ok(color) = text {
                 return Ok(color);
             }
-            Err(FileReadingError::from(ParsingError::new(
-                self.file.to_string(),
-                format!("{raw} could not be interpreted as a color"),
-                line,
-            )))
+            Err(FileReadingError::from_parsing_error(
+                self.file,
+                ParsingError::new(format!("{raw} could not be interpreted as a color"), line),
+            ))
         }
-        fn from_entries(path: &str, entries: Vec<Entry>) -> Self {
+        fn from_entries(path: &'p Path, entries: Vec<Entry>) -> Self {
             let mut map: HashMap<String, (usize, String)> = HashMap::new();
 
             for entry in entries {
@@ -202,28 +211,24 @@ pub mod datastructure {
                 );
             }
 
-            Self {
-                file: path.to_string(),
-                map,
-            }
+            Self { file: path, map }
         }
     }
 
-    fn f64_from_string(file: String, line: usize, str: &str) -> Result<f64, ParsingError> {
+    fn f64_from_string(line: usize, str: &str) -> Result<f64, ParsingError> {
         let mut number: f64 = 0.0;
         let mut decimal: f64 = 1.0;
         let mut decimals: bool = false;
-        let mut negative:bool = false;
+        let mut negative: bool = false;
         for character in str.chars() {
-            if !character.is_numeric() && character != '.' && character != '-'{
+            if !character.is_numeric() && character != '.' && character != '-' {
                 return Err(ParsingError::new(
-                    file,
                     String::from("Non numeric character in f64"),
                     line,
                 ));
             }
             if character == '-' {
-                negative =true;
+                negative = true;
                 continue;
             }
             if !decimals {
@@ -240,7 +245,7 @@ pub mod datastructure {
             }
             number += num as f64 * decimal;
         }
-        if negative{
+        if negative {
             return Ok(-number);
         }
         Ok(number)

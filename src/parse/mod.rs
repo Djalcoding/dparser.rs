@@ -1,4 +1,4 @@
-use std::{fmt::Display};
+use std::{fmt::Display, path::Path};
 
 use crate::{
     error_handling::{FileReadingError, ParsingError},
@@ -7,7 +7,7 @@ use crate::{
 pub struct Entry {
     name: String,
     content: String,
-    line: usize
+    line: usize,
 }
 
 impl Entry {
@@ -30,13 +30,13 @@ impl Display for Entry {
     }
 }
 
-pub fn parse_file(path: &str) -> Result<Vec<Entry>, FileReadingError> {
+pub fn parse_file(path: &Path) -> Result<Vec<Entry>, FileReadingError> {
     let block_result = read_file(path);
     let mut block = String::new();
     if let Ok(b) = block_result {
         block = b;
     } else if let Err(e) = block_result {
-        return Err(FileReadingError::new(path.to_string(), e.to_string()));
+        return Err(FileReadingError::new(Path::new(path), e.to_string()));
     }
 
     let mut entries: Vec<Entry> = Vec::new();
@@ -63,18 +63,20 @@ pub fn parse_file(path: &str) -> Result<Vec<Entry>, FileReadingError> {
                 value = String::from(element);
                 continue;
             } else {
-                return Err(FileReadingError::from(ParsingError::new(
-                    path.to_string(),
-                    String::from("Too many arguments on single line"),
-                    line_number,
-                )));
+                return Err(FileReadingError::from_parsing_error(
+                    Path::new(path),
+                    ParsingError::new(
+                        String::from("Too many arguments on single line"),
+                        line_number,
+                    ),
+                ));
             }
         }
         if !name.is_empty() {
             entries.push(Entry {
-                name,
+                name: name.to_lowercase(),
                 content: value,
-                line: line_number
+                line: line_number,
             });
         }
     }

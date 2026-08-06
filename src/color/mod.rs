@@ -1,6 +1,6 @@
 //! The module that contains the [`Color`] struct 
 use hex::FromHexError;
-use std::{fmt::Display, io::Error, sync::LazyLock};
+use std::{fmt::Display, io::Error};
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
 #[derive(Clone)]
 pub struct Color {
