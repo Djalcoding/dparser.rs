@@ -1,55 +1,55 @@
-//! The module that contains the [`Color`] struct 
+//! The module that contains the [`Color`] struct
 use hex::FromHexError;
 use std::{fmt::Display, io::Error};
+
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
 #[derive(Clone)]
-pub struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
-    hexadecimal: String,
+pub enum Color {
+    RGB(u8, u8, u8),
+    RGBA(u8, u8, u8, u8),
+    PALETTE(u8),
 }
 
-
-impl Default for Color{
+impl Default for Color {
     fn default() -> Self {
-        Color::rgb(0, 0, 0) 
-    } 
+        Color::rgb(0, 0, 0)
+    }
 }
 
 impl Color {
     /// Create a new [`Color`] from a red color value, a green color value and a blue color
     /// value
     pub fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Color {
-            r,
-            g,
-            b,
-            hexadecimal: format!("#{r:02x}{g:02x}{b:02x}"),
-        }
+        Color::RGB(r, g, b)
     }
 
-    /// Create a new [`Color`] from a color name.
+    /// Create a new [`Color`] from a red color value, a green color value, a blue color
+    /// value and alpha value
+    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Color::RGBA(r, g, b, a)
+    }
+
+    /// Create a new palette [`Color`] from a name.
     /// This will result in an error if the color name isn't recognized
-    /// ## recognized names
-    ///  - red => (255, 0, 0)
-    ///  - green => (0, 255, 0)
-    ///  - blue => (0, 0, 255)
-    ///  - white => (255, 255, 255)
-    ///  - black => (0, 0, 0)
-    ///  - yellow => (255, 255 ,0)
-    ///  - purple => (255, 0, 255)
-    ///  - cyan => (0, 255, 255)
     pub fn from_color_string(string: &str) -> Result<Self, Error> {
-        match string.to_lowercase().as_str() {
-            "red" => Ok(Color::rgb(255, 0, 0)),
-            "green" => Ok(Color::rgb(0, 255, 0)),
-            "blue" => Ok(Color::rgb(0, 0, 255)),
-            "white" => Ok(Color::rgb(255, 255, 255)),
-            "black" => Ok(Color::rgb(0, 0, 0)),
-            "yellow" => Ok(Color::rgb(255, 255, 0)),
-            "purple" => Ok(Color::rgb(255, 0, 255)),
-            "cyan" => Ok(Color::rgb(0, 255, 255)),
+        let parsed: String = string.chars().filter(|c| !c.is_whitespace()).collect();
+        match parsed.to_lowercase().as_str() {
+            "black" => Ok(Color::PALETTE(0)),
+            "red" => Ok(Color::PALETTE(1)),
+            "green" => Ok(Color::PALETTE(2)),
+            "yellow" => Ok(Color::PALETTE(3)),
+            "blue" => Ok(Color::PALETTE(4)),
+            "magenta" => Ok(Color::PALETTE(5)),
+            "cyan" => Ok(Color::PALETTE(6)),
+            "white" => Ok(Color::PALETTE(7)),
+            "brightblack" => Ok(Color::PALETTE(8)),
+            "brightred" => Ok(Color::PALETTE(9)),
+            "brightgreen" => Ok(Color::PALETTE(10)),
+            "brightyellow" => Ok(Color::PALETTE(11)),
+            "brightblue" => Ok(Color::PALETTE(12)),
+            "brightmagenta" => Ok(Color::PALETTE(13)),
+            "brightcyan" => Ok(Color::PALETTE(14)),
+            "brightwhite" => Ok(Color::PALETTE(15)),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("'{string}' is not a recognized color"),
@@ -58,7 +58,7 @@ impl Color {
     }
 
     /// Create a new [`Color`] from a string slice formatted this way :
-    /// "(r,g,b)"
+    /// "(r,g,b,a)" (where alpha is optional)
     ///     - "()" are necessary
     ///     - Each value *must* be seperated by a comma
     ///     - Each value *must* be at most 255
@@ -89,7 +89,11 @@ impl Color {
                 "less than 3 arguments for color definition",
             ));
         }
-        Ok(Color::rgb(decode[0], decode[1], decode[2]))
+        if decode.len() == 3 {
+            Ok(Color::rgb(decode[0], decode[1], decode[2]))
+        } else {
+            Ok(Color::rgba(decode[0], decode[1], decode[2], decode[3]))
+        }
     }
 
     /// Create a new [`Color`] from a string slice representing an hexadecimal value
@@ -104,45 +108,80 @@ impl Color {
             color = hexadecimal_color.chars().filter(|c| *c != '#').collect();
         }
         let decode = hex::decode(&color)?;
-
-        Ok(Color::rgb(decode[0], decode[1], decode[2]))
+        if decode.len() <= 2 || decode.len() > 4 {
+            Err(FromHexError::InvalidStringLength)
+        } else if decode.len() == 3 {
+            Ok(Color::rgb(decode[0], decode[1], decode[2]))
+        } else {
+            Ok(Color::rgba(decode[0], decode[1], decode[2], decode[3]))
+        }
     }
 
-    /// Returns the red value of the color
+    /// Returns the red value of the color, for palette values, the palette index will be returned
     pub fn red(&self) -> u8 {
-        self.r
+        *match self {
+            Color::RGB(r, _, _) => r,
+            Color::RGBA(r, _, _, _) => r,
+            Color::PALETTE(p) => p,
+        }
     }
 
-    /// Returns the green value of the color
+    /// Returns the green value of the color, for palette values, the palette index will be returned
     pub fn green(&self) -> u8 {
-        self.g
+        *match self {
+            Color::RGB(_, g, _) => g,
+            Color::RGBA(_, g, _, _) => g,
+            Color::PALETTE(p) => p,
+        }
     }
 
-    /// Returns the blue value of the color
+    /// Returns the blue value of the color, for palette values, the palette index will be returned
     pub fn blue(&self) -> u8 {
-        self.b
+        *match self {
+            Color::RGB(_, _, b) => b,
+            Color::RGBA(_, _, b, _) => b,
+            Color::PALETTE(p) => p,
+        }
+    }
+
+    /// Returns the alpha of a color, for values with no alpha, 255 will be returned
+    pub fn alpha(&self) -> u8 {
+        match self {
+            Color::RGB(_, _, _) => 255,
+            Color::RGBA(_, _, _, a) => *a,
+            Color::PALETTE(_) => 255,
+        }
     }
 
     /// Returns the hexadecimal value of the color
     pub fn hexadecimal_value(&self) -> String {
-        self.hexadecimal.clone()
+        match self {
+            Color::RGB(r, g, b) => hex::encode(vec![*r, *g, *b]),
+            Color::RGBA(r, g, b, a) => hex::encode(vec![*r, *g, *b, *a]),
+            Color::PALETTE(p) => hex::encode(vec![*p]),
+        }
     }
 
     /// Returns the inverted variant of the color
-    pub fn inverted(&self)->Self {
-        Color::rgb(255-self.r, 255-self.g, 255-self.b)
+    pub fn inverted(&self) -> Self {
+        Color::rgb(255 - self.red(), 255 - self.green(), 255 - self.blue())
     }
 }
 
 impl Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "r: {}, g: {}, b: {}, hex: {}",
-            self.red(),
-            self.green(),
-            self.blue(),
-            self.hexadecimal_value()
-        )
+        match self {
+            Color::RGB(r, g, b) => write!(
+                f,
+                "r: {r}, g: {g}, b: {b}, hex: {}",
+                self.hexadecimal_value()
+            ),
+            Color::RGBA(r, g, b, a) => write!(
+                f,
+                "r: {r}, g: {g}, b: {b}, a: {a}, hex: {}",
+                self.hexadecimal_value()
+            ),
+            Color::PALETTE(p) => write!(f, "palette index : {p}"),
+        }
     }
 }
