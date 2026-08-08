@@ -10,6 +10,8 @@ pub enum Color {
     PALETTE(u8),
 }
 
+const TRANSPARENT:Color = Color::RGBA(0, 0, 0, 0);
+
 impl Default for Color {
     fn default() -> Self {
         Color::rgb(0, 0, 0)
@@ -50,6 +52,7 @@ impl Color {
             "brightmagenta" => Ok(Color::PALETTE(13)),
             "brightcyan" => Ok(Color::PALETTE(14)),
             "brightwhite" => Ok(Color::PALETTE(15)),
+            "transparent" | "none" => Ok(TRANSPARENT),
             _ => Err(Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("'{string}' is not a recognized color"),
