@@ -66,7 +66,7 @@ pub fn parse_file(path: &Path) -> Result<Vec<Entry>, FileReadingError> {
                 return Err(FileReadingError::from_parsing_error(
                     Path::new(path),
                     ParsingError::new(
-                        String::from("Too many arguments on single line"),
+                        String::from("Too many Objects on single line"),
                         line_number,
                     ),
                 ));

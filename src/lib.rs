@@ -54,15 +54,16 @@ pub mod datastructure {
         parse::{Entry, parse_file},
     };
     use std::{
-        cmp::{self, min},
-        collections::HashMap,
-        path::Path,
+        cmp::{self, min}, collections::{HashMap, hash_map::Iter}, path::Path,
     };
+
+    type MapKey= String;
+    type MapValue= (usize, String);
     /// This is the data structure used to retrive and interpret data from a parsed text file, this
     /// is implemented as a HashMap for constant time retrival
     pub struct ParsedData<'p> {
         file: &'p Path,
-        map: HashMap<String, (usize, String)>,
+        map: HashMap<MapKey, MapValue>,
     }
 
     impl<'p> ParsedData<'p> {
@@ -84,7 +85,7 @@ pub mod datastructure {
         pub fn as_raw(&self, key: &str) -> Result<(usize, String), FileReadingError> {
             let modified_key = key
                 .chars()
-                .filter(|c| c.is_ascii())
+                .filter(|c| c.is_ascii() && !c.is_whitespace())
                 .collect::<String>()
                 .to_lowercase();
 
@@ -200,6 +201,9 @@ pub mod datastructure {
                 self.file,
                 ParsingError::new(format!("{raw} could not be interpreted as a color"), line),
             ))
+        }
+        pub fn iter(&self) -> Iter<'_,MapKey, MapValue>{
+            self.map.iter()
         }
         fn from_entries(path: &'p Path, entries: Vec<Entry>) -> Self {
             let mut map: HashMap<String, (usize, String)> = HashMap::new();
