@@ -3,14 +3,14 @@ use hex::FromHexError;
 use std::{fmt::Display, io::Error};
 
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
-#[derive(Clone)]
+#[derive(Clone, Copy, std::cmp::PartialEq, Debug, Hash)]
 pub enum Color {
     RGB(u8, u8, u8),
     RGBA(u8, u8, u8, u8),
     PALETTE(u8),
 }
 
-const TRANSPARENT:Color = Color::RGBA(0, 0, 0, 0);
+const TRANSPARENT: Color = Color::RGBA(0, 0, 0, 0);
 
 impl Default for Color {
     fn default() -> Self {
@@ -159,9 +159,9 @@ impl Color {
     /// Returns the hexadecimal value of the color
     pub fn hexadecimal_value(&self) -> String {
         match self {
-            Color::RGB(r, g, b) => hex::encode(vec![*r, *g, *b]),
-            Color::RGBA(r, g, b, a) => hex::encode(vec![*r, *g, *b, *a]),
-            Color::PALETTE(p) => hex::encode(vec![*p]),
+            Color::RGB(r, g, b) => hex::encode([*r, *g, *b]),
+            Color::RGBA(r, g, b, a) => hex::encode([*r, *g, *b, *a]),
+            Color::PALETTE(p) => hex::encode([*p]),
         }
     }
 

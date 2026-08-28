@@ -8,8 +8,11 @@
 //!   - Supported types are :
 //!     - Strings
 //!     - 64 bit precision floating point numbers
-//!     - Colors (Represented with a name, an hexadecimal string or rgb values)
+//!     - Colors (Represented with a name, an hexadecimal string or rgba values)
 //!     - Booleans
+//!   - whitespaces are ignored
+//!   - Strings must be surrounded by ""
+//!   - Raw data can be extracted with ParsedData::as_raw(&self, key:&str)
 //! # Example
 //!     !! This is documentation.
 //!         !! This is a number
@@ -35,9 +38,11 @@
 //!     bool3 = 0
 //! # Rust Code Example
 //! ```
-//! let path = Path::new("djal_parser/src/example_config_file.dconfig");
+//! let path = Path::new("./src/example_config_file.dconfig");
 //! let parsed_data_map = ParsedData::from_file(path).unwrap();
-//! assert_eq(parsedDataMap.as_text("Hello, World !"), Ok("Hello, World !"))  
+//! assert_eq(parsedDataMap.as_number("number1"), Ok(-12 as f64))  
+//! assert_eq(parsedDataMap.as_text("text"), Ok("Lorem Ipsum"))  
+//! assert_eq(parsedDataMap.as_text("TeXt"), Ok("Lorem Ipsum"))  
 //! ```
 pub mod color;
 pub mod error_handling;
