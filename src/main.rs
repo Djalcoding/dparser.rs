@@ -1,9 +1,10 @@
 use std::path::Path;
 
-use djal_parser::{ color::Color, datastructure::ParsedData};
+use djal_parser::{datastructure::ParsedData};
 
 fn main() {
-    let path = Path::new("/home/bert/Projects/RustProjects/djal_parser/src/example_config_file.dconfig");
+    let path =
+        Path::new("/home/bert/Projects/RustProjects/djal_parser/src/example_config_file.dconfig");
     let s = ParsedData::from_file(path).unwrap();
-    println!("{}", s.as_color("color").unwrap() == Color::RGBA(0, 0, 0,0));
+    println!("{:?}", s.as_color_array("bigArray").unwrap());
 }

@@ -21,14 +21,18 @@ impl Default for Color {
 impl Color {
     /// Create a new [`Color`] from a red color value, a green color value and a blue color
     /// value
-    pub fn rgb(r: u8, g: u8, b: u8) -> Self {
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Color::RGB(r, g, b)
     }
 
     /// Create a new [`Color`] from a red color value, a green color value, a blue color
     /// value and alpha value
-    pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Color::RGBA(r, g, b, a)
+    }
+
+    pub const fn palette(index:u8)->Self {
+        Color::PALETTE(index)
     }
 
     /// Create a new palette [`Color`] from a name.
@@ -121,7 +125,7 @@ impl Color {
     }
 
     /// Returns the red value of the color, for palette values, the palette index will be returned
-    pub fn red(&self) -> u8 {
+    pub const fn red(&self) -> u8 {
         *match self {
             Color::RGB(r, _, _) => r,
             Color::RGBA(r, _, _, _) => r,
@@ -130,7 +134,7 @@ impl Color {
     }
 
     /// Returns the green value of the color, for palette values, the palette index will be returned
-    pub fn green(&self) -> u8 {
+    pub const fn green(&self) -> u8 {
         *match self {
             Color::RGB(_, g, _) => g,
             Color::RGBA(_, g, _, _) => g,
@@ -139,7 +143,7 @@ impl Color {
     }
 
     /// Returns the blue value of the color, for palette values, the palette index will be returned
-    pub fn blue(&self) -> u8 {
+    pub const fn blue(&self) -> u8 {
         *match self {
             Color::RGB(_, _, b) => b,
             Color::RGBA(_, _, b, _) => b,
@@ -148,7 +152,7 @@ impl Color {
     }
 
     /// Returns the alpha of a color, for values with no alpha, 255 will be returned
-    pub fn alpha(&self) -> u8 {
+    pub const fn alpha(&self) -> u8 {
         match self {
             Color::RGB(_, _, _) => 255,
             Color::RGBA(_, _, _, a) => *a,
@@ -166,7 +170,7 @@ impl Color {
     }
 
     /// Returns the inverted variant of the color
-    pub fn inverted(&self) -> Self {
+    pub const fn inverted(&self) -> Self {
         Color::rgb(255 - self.red(), 255 - self.green(), 255 - self.blue())
     }
 }
