@@ -3,7 +3,7 @@ use std::{fmt::Display, path::Path};
 use crate::{
     color::Color,
     error_handling::{
-        BoolParsingError, ColorParseError, NumberParsingError, ParsingError, TextParsingError,
+        BoolParsingError, ColorParsingError, NumberParsingError, ParsingError, TextParsingError,
     },
     read::read_file,
 };
@@ -101,7 +101,7 @@ pub(crate) fn split_on_commas(array: &str) -> Vec<&str> {
     output
 }
 
-pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParseError<'_>> {
+pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParsingError<'_>> {
     let rgb = Color::from_rgb_string(raw);
     let hexadecimal = Color::from_hexadecimal(raw);
     let text = Color::from_color_string(raw);
