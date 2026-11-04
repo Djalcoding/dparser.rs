@@ -2,7 +2,7 @@
 use hex::FromHexError;
 use std::{fmt::Display};
 
-use crate::error_handling::ColorParseError;
+use crate::error_handling::ColorParsingError;
 
 
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
@@ -41,7 +41,7 @@ impl Color {
 
     /// Create a new palette [`Color`] from a name.
     /// This will result in an error if the color name isn't recognized
-    pub fn from_color_string(string: &str) -> Result<Self, ColorParseError<'_>> {
+    pub fn from_color_string(string: &str) -> Result<Self, ColorParsingError<'_>> {
         let parsed: String = string.chars().filter(|c| !c.is_whitespace()).collect();
         match parsed.to_lowercase().as_str() {
             "black" => Ok(Color::PALETTE(0)),
@@ -61,7 +61,7 @@ impl Color {
             "brightcyan" => Ok(Color::PALETTE(14)),
             "brightwhite" => Ok(Color::PALETTE(15)),
             "transparent" | "none" => Ok(TRANSPARENT),
-            _ => Err(ColorParseError::UnknownName(string)),
+            _ => Err(ColorParsingError::UnknownName(string)),
         }
     }
 
@@ -72,7 +72,7 @@ impl Color {
     ///     - Each value *must* be at most 255
     ///     - whitespace is irrelevant
     /// This will result in an error if the string cannot be parsed
-    pub fn from_rgb_string(string: &str) -> Result<Self, ColorParseError<'_>> {
+    pub fn from_rgb_string(string: &str) -> Result<Self, ColorParsingError<'_>> {
         let mut decode: Vec<u8> = Vec::new();
         for color in string.split(',').filter(|s| !s.is_empty()) {
             let mut num: u16 = 0;
@@ -81,18 +81,18 @@ impl Color {
                     continue;
                 }
                 if !character.is_ascii_digit() {
-                    return Err(ColorParseError::NonNumericCharacter(string,character));
+                    return Err(ColorParsingError::NonNumericCharacter(string,character));
                 }
                 num *= 10;
                 num += character as u16 - '0' as u16;
                 if num > 255 {
-                    return Err(ColorParseError::Over255);
+                    return Err(ColorParsingError::Over255);
                 }
             }
             decode.push(num as u8);
         }
         if decode.len() < 3 {
-            return Err(ColorParseError::InvalidArgumentCount {
+            return Err(ColorParsingError::InvalidArgumentCount {
                 found: decode.len(),
             });
         }
