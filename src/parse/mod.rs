@@ -33,14 +33,14 @@ impl Display for ConfigEntry {
     }
 }
 
-pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingError<'_>> {
+pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingError> {
     let block_result = read_file(path);
     let mut block = String::new();
     if let Ok(b) = block_result {
         block = b;
     } else if let Err(e) = block_result {
         return Err(ParsingError::IOError {
-            filepath: path,
+            filepath: path.to_owned(),
             error: e,
         });
     }
@@ -62,7 +62,7 @@ pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingErro
         let separator_index = without_comment.find(":");
         if separator_index.is_none() {
             return Err(ParsingError::NoSeperator {
-                filepath: path,
+                filepath: path.to_owned(),
                 line: line_number,
             });
         }
@@ -101,7 +101,7 @@ pub(crate) fn split_on_commas(array: &str) -> Vec<&str> {
     output
 }
 
-pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParsingError<'_>> {
+pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParsingError> {
     let rgb = Color::from_rgb_string(raw);
     let hexadecimal = Color::from_hexadecimal(raw);
     let text = Color::from_color_string(raw);
@@ -117,7 +117,7 @@ pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParsingError<'_>> {
     }
 }
 
-pub(crate) fn parse_text(raw: &str) -> Result<String, TextParsingError<'_>> {
+pub(crate) fn parse_text(raw: &str) -> Result<String, TextParsingError> {
     let mut quote_count: u16 = 0;
     let mut first_quote: usize = 0xFFFFFFFF;
     let mut last_quote: usize = 0x0;
@@ -138,12 +138,12 @@ pub(crate) fn parse_text(raw: &str) -> Result<String, TextParsingError<'_>> {
         .collect();
 
     if quote_count < 2 {
-        return Err(TextParsingError::NotEnoughDoubleQuotes(raw));
+        return Err(TextParsingError::NotEnoughDoubleQuotes(raw.to_owned()));
     }
     Ok(trimmed)
 }
 
-pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError<'_>> {
+pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError> {
     let mut negative: bool = false;
     let mut number: f64 = 0.0;
     let mut decimal_start: Option<usize> = None;
@@ -155,7 +155,7 @@ pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError<'_>> {
             }
             '-' if !found_first_digit => negative = !negative,
             _ if !character.is_ascii_digit() => {
-                return Err(NumberParsingError::NonNumericCharacter(str, character));
+                return Err(NumberParsingError::NonNumericCharacter(str.to_owned(), character));
             }
             _ => {
                 found_first_digit = true;
@@ -168,7 +168,7 @@ pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError<'_>> {
                 }
                 if !number.is_finite() {
                     // f64 overflows to inf
-                    return Err(NumberParsingError::TooLarge(str));
+                    return Err(NumberParsingError::TooLarge(str.to_owned()));
                 }
             }
         }
@@ -176,7 +176,7 @@ pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError<'_>> {
     Ok(number)
 }
 
-pub(crate) fn parse_bool(raw: &str) -> Result<bool, BoolParsingError<'_>> {
+pub(crate) fn parse_bool(raw: &str) -> Result<bool, BoolParsingError> {
     let lower_raw = raw.to_lowercase();
 
     let yes: bool =
@@ -185,7 +185,7 @@ pub(crate) fn parse_bool(raw: &str) -> Result<bool, BoolParsingError<'_>> {
         lower_raw == "no" || lower_raw == "n" || lower_raw == "false" || lower_raw == "0";
 
     if !no && !yes {
-        return Err(BoolParsingError::UnknownName(raw));
+        return Err(BoolParsingError::UnknownName(raw.to_owned()));
     }
     Ok(yes)
 }

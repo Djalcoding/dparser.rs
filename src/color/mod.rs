@@ -1,9 +1,8 @@
 //! The module that contains the [`Color`] struct
 use hex::FromHexError;
-use std::{fmt::Display};
+use std::fmt::Display;
 
 use crate::error_handling::ColorParsingError;
-
 
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
 #[derive(Clone, Copy, std::cmp::PartialEq, Debug, Hash)]
@@ -12,7 +11,6 @@ pub enum Color {
     RGBA(u8, u8, u8, u8),
     PALETTE(u8),
 }
-
 
 const TRANSPARENT: Color = Color::RGBA(0, 0, 0, 0);
 
@@ -41,7 +39,7 @@ impl Color {
 
     /// Create a new palette [`Color`] from a name.
     /// This will result in an error if the color name isn't recognized
-    pub fn from_color_string(string: &str) -> Result<Self, ColorParsingError<'_>> {
+    pub fn from_color_string(string: &str) -> Result<Self, ColorParsingError> {
         let parsed: String = string.chars().filter(|c| !c.is_whitespace()).collect();
         match parsed.to_lowercase().as_str() {
             "black" => Ok(Color::PALETTE(0)),
@@ -61,7 +59,7 @@ impl Color {
             "brightcyan" => Ok(Color::PALETTE(14)),
             "brightwhite" => Ok(Color::PALETTE(15)),
             "transparent" | "none" => Ok(TRANSPARENT),
-            _ => Err(ColorParsingError::UnknownName(string)),
+            _ => Err(ColorParsingError::UnknownName(string.to_owned())),
         }
     }
 
@@ -72,7 +70,7 @@ impl Color {
     ///     - Each value *must* be at most 255
     ///     - whitespace is irrelevant
     /// This will result in an error if the string cannot be parsed
-    pub fn from_rgb_string(string: &str) -> Result<Self, ColorParsingError<'_>> {
+    pub fn from_rgb_string(string: &str) -> Result<Self, ColorParsingError> {
         let mut decode: Vec<u8> = Vec::new();
         for color in string.split(',').filter(|s| !s.is_empty()) {
             let mut num: u16 = 0;
@@ -81,7 +79,10 @@ impl Color {
                     continue;
                 }
                 if !character.is_ascii_digit() {
-                    return Err(ColorParsingError::NonNumericCharacter(string,character));
+                    return Err(ColorParsingError::NonNumericCharacter(
+                        string.to_owned(),
+                        character,
+                    ));
                 }
                 num *= 10;
                 num += character as u16 - '0' as u16;
