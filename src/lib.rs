@@ -86,6 +86,7 @@ pub mod datastructure {
     type MapValue = (usize, String);
     /// Data structure used to retrive and interpret data from a parsed text file
     /// HashMap Wrapper 
+    #[derive(Debug)]
     pub struct ParsedData<'p> {
         file: &'p Path,
         map: HashMap<MapKey, MapValue>,

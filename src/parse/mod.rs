@@ -59,6 +59,9 @@ pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingErro
             .collect();
         let (mut without_comment, _) = trimmed_line.split_once("!!").unwrap_or((&trimmed_line, ""));
         without_comment = without_comment.trim();
+        if without_comment.is_empty() {
+            continue;
+        }
         let separator_index = without_comment.find(":");
         if separator_index.is_none() {
             return Err(ParsingError::NoSeperator {
@@ -155,7 +158,10 @@ pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError> {
             }
             '-' if !found_first_digit => negative = !negative,
             _ if !character.is_ascii_digit() => {
-                return Err(NumberParsingError::NonNumericCharacter(str.to_owned(), character));
+                return Err(NumberParsingError::NonNumericCharacter(
+                    str.to_owned(),
+                    character,
+                ));
             }
             _ => {
                 found_first_digit = true;

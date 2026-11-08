@@ -1,4 +1,6 @@
-color: none 
+!! Comment
+    !! Indented Comment
+color: none  !! Inline Comment
 name A : "Call me : Ishmael"
 nums: 1
 bigArray: (1,255,100), red,#ff00ff,#ffffff
