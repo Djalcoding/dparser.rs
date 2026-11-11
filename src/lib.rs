@@ -7,7 +7,7 @@
 //!   - Each field must be defined with a name and a value, seperated with a colon
 //!   - Supported types are :
 //!     - Strings
-//!     - 64 bit precision floating point numbers
+//!     - Any integer or floating point number
 //!     - Colors (Represented with a name, an hexadecimal string or rgba values)
 //!     - Booleans
 //!     - Arrays
@@ -57,17 +57,16 @@
 //!     
 //! let path = PathBuf::from("./src/example_config_file.dconfig");
 //! let parsed_data = ParsedData::from_file(&path).unwrap();
-//! assert_eq!(parsed_data.as_number("number2").unwrap(), -12f64);
-//! assert_eq!(parsed_data.as_text("text").unwrap(), String::from("Lorem Ipsum"));
-//! assert_eq!(parsed_data.as_text("TeXt").unwrap(), String::from("Lorem Ipsum"));
+//! assert_eq!(parsed_data.read_as::<f64>("number2").unwrap(), -12f64);
+//! assert_eq!(parsed_data.read_as::<String>("text").unwrap(), String::from("Lorem Ipsum"));
+//! assert_eq!(parsed_data.read_as::<String>("TeXt").unwrap(), String::from("Lorem Ipsum"));
 //! ```
 
 use std::result;
 
-use crate::error_handling::ParsingResult;
+use crate::errors::ParsingResult;
 pub mod color;
-pub mod error_handling;
-pub mod macros;
+pub mod errors;
 mod parse;
 mod read;
 
@@ -77,10 +76,9 @@ pub mod datastructure {
     //! This module implements a data structure to easily retrieve and interpret data from a parsed
     //! text file
     use crate::{
-        Result, color::Color, error_handling::ParsingResult, parse::{
-            ConfigEntry, parse_bool, parse_color, parse_file, parse_number, parse_text,
-            split_on_commas,
-        },
+        Result,
+        errors::ParsingResult,
+        parse::{ConfigConstructible, ConfigEntry, parse_file, split_on_commas},
     };
     use std::{
         collections::{HashMap, hash_map::Iter},
@@ -98,13 +96,7 @@ pub mod datastructure {
     }
 
     impl<'p> ParsedData<'p> {
-        /// ## Arguments
-        ///
         /// Create a new ParsedData from a filepath (`path`) provided as a String.
-        ///
-        /// ## Return type
-        ///
-        /// Returns a Result<ParsedData, Error>.
         /// This will result in an error if the file cannot be properly parsed.
         pub fn from_file(path: &'p Path) -> Result<Self> {
             let entries: Vec<ConfigEntry> = parse_file(path)?;
@@ -118,8 +110,9 @@ pub mod datastructure {
                 .to_lowercase()
         }
 
-        /// Returns the raw data from a key inside of the text file, along with its line number
-        /// This can also return a [`ParsingError`] if the key isn't present in the file.
+        /// Returns the raw data from a key inside of the text file, along with its line number.
+        /// This can also return a [`ParsingResult`] if the key isn't present in the file or if the
+        /// default value is explicitly requested.
         pub fn as_raw(&self, key: &str) -> Result<(usize, &str)> {
             let entry = self.map.get(&Self::standardize_key(key));
             if entry.is_none() {
@@ -132,165 +125,48 @@ pub mod datastructure {
             Ok((*line_number, string))
         }
 
-        /// Returns data interpreted as a piece of text from a key inside of the text file.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if the
-        /// number of quotes is non-even
-        pub fn as_text(&self, key: &str) -> Result<String> {
+        /// Try to construct [`T`] from the entry named [`key`] 
+        /// This can also return a [`ParsingResult`] if the key isn't present in the file.
+        /// [`See Also`]
+        /// [`Self::read_as()`]
+        pub fn read_as<T: ConfigConstructible>(&self, key: &str) -> Result<T> {
             let (line, raw) = self.as_raw(key)?;
-            let parsed = parse_text(raw);
-            match parsed {
-                Ok(output) => Ok(output),
-                Err(error) => Err(ParsingResult::TextError {
+            let result = T::parse(raw);
+            if let Err(error) = result {
+                Err(ParsingResult::ParsingError {
                     filepath: self.file.to_owned(),
                     line,
                     error,
-                }),
+                })
+            } else {
+                Ok(result.unwrap())
             }
         }
-
-        /// Returns data interpreted as f64 from a key inside of the text file.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// non-numeric character is inside of the value
-        pub fn as_number(&self, key: &str) -> Result<f64> {
-            let (line, raw) = self.as_raw(key)?;
-            let result = parse_number(raw);
-            match result {
-                Ok(value) => Ok(value),
-                Err(e) => Err(ParsingResult::NumberError {
-                    filepath: self.file.to_owned(),
-                    line,
-                    error: e,
-                }),
-            }
-        }
-
-        /// Returns data interpreted as boolean from a key inside of the text file.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// an unrecognized symbol is the value.
-        /// ## Note
-        /// the recognized symbols are :
-        ///   - 'yes', 'y', 'true' and '1' for true,
-        ///   - 'no', 'n', 'false' and '0' for false.
-        ///
-        /// They are case insensitive
-        pub fn as_boolean(&self, key: &str) -> Result<bool> {
-            let (line, raw) = self.as_raw(key)?;
-            match parse_bool(raw) {
-                Ok(b) => Ok(b),
-                Err(error) => Err(ParsingResult::BoolError {
-                    filepath: self.file.to_owned(),
-                    line,
-                    error,
-                }),
-            }
-        }
-
-        /// Returns data interpreted as Color from a key inside of the text file.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// the raw data cannot be parsed as a color as an rgb value, an hexadecimal or a color
-        /// name
-        /// [See Also]
-        /// [`Color`] for more information
-        pub fn as_color(&self, key: &str) -> Result<Color> {
-            let (line, raw) = self.as_raw(key)?;
-            let color = parse_color(raw);
-            match color {
-                Ok(color) => Ok(color),
-                Err(error) => Err(ParsingResult::ColorError {
-                    filepath: self.file.to_owned(),
-                    line,
-                    error,
-                }),
-            }
-        }
-
         /// Returns data interpreted as a raw array.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file.
+        /// This can also return a [`ParsingResult`] if the key isn't present in the file or if the
+        /// default value was explicitly requested.
         /// This is the array-variant for [`ParsedData::as_raw()`]
         pub fn as_raw_array(&self, key: &str) -> Result<(usize, Vec<&str>)> {
             let (line, raw_text) = self.as_raw(key)?;
             let splitted = split_on_commas(raw_text);
             Ok((line, splitted))
         }
-
-        /// Returns data interpreted as an array of strings.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// anything in the array fails text parsing
-        /// [See also]
-        /// [`ParsedData::as_text()`]
-        pub fn as_text_array(&self, key: &str) -> Result<Vec<String>> {
-            let (line, raw) = self.as_raw_array(key)?;
-            raw.iter()
-                .map(|array_element| match parse_text(array_element) {
-                    Ok(data) => Ok(data),
-                    Err(error) => Err(ParsingResult::TextError {
-                        filepath: self.file.to_owned(),
-                        line,
-                        error,
-                    }
-                    .array_error()),
-                })
-                .collect()
+        /// Try to construct a [`Vec<T>`] from the entry named [`key`] 
+        /// This can also return a [`ParsingResult`] if the key isn't present in the file.
+        /// [`See Also`]
+        /// [`Self::as_raw_array()`]
+        pub fn read_as_array<T: ConfigConstructible>(&self, key: &str) -> Result<Vec<T>> {
+            let (line, raw_array) = self.as_raw_array(key)?;
+            raw_array.iter().map(|raw_data| match T::parse(raw_data) {
+                Ok(data) => Ok(data),
+                Err(error) => Err(ParsingResult::ParsingError {
+                    filepath: self.file.to_owned(),
+                    line,
+                    error,
+                }.array_error()),
+            }).collect()
         }
 
-        /// Returns data interpreted as an array of colors.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// anything in the array fails color parsing
-        /// [See also]
-        /// [`ParsedData::as_color()`]
-        pub fn as_color_array(&self, key: &str) -> Result<Vec<Color>> {
-            let (line, raw) = self.as_raw_array(key)?;
-            raw.iter()
-                .map(|array_element| match parse_color(array_element) {
-                    Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingResult::ColorError {
-                        filepath: self.file.to_owned(),
-                        error,
-                        line,
-                    }
-                    .array_error()),
-                })
-                .collect()
-        }
-
-        /// Returns data interpreted as an array of numbers.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// anything in the array fails number parsing
-        /// [See also]
-        /// [`ParsedData::as_number()`]
-        pub fn as_number_array(&self, key: &str) -> Result<Vec<f64>> {
-            let (line, raw) = self.as_raw_array(key)?;
-            raw.iter()
-                .map(|array_element| match parse_number(array_element) {
-                    Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingResult::NumberError {
-                        filepath: self.file.to_owned(),
-                        line,
-                        error,
-                    }
-                    .array_error()),
-                })
-                .collect()
-        }
-        /// Returns data interpreted as an array of booleans.
-        /// This can also return a [`ParsingError`] if the key isn't present in the file or if
-        /// anything in the array fails boolean parsing
-        /// [See also]
-        /// [`ParsedData::as_boolean()`]
-        pub fn as_boolean_array(&self, key: &str) -> Result<Vec<bool>> {
-            let (line, raw) = self.as_raw_array(key)?;
-            raw.iter()
-                .map(|array_element| match parse_bool(array_element) {
-                    Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingResult::BoolError {
-                        filepath: self.file.to_owned(),
-                        line,
-                        error,
-                    }
-                    .array_error()),
-                })
-                .collect()
-        }
         /// See [`HashMap::iter()`]
         pub fn iter(&self) -> Iter<'_, MapKey, MapValue> {
             self.map.iter()

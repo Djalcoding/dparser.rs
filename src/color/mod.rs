@@ -2,7 +2,7 @@
 use hex::FromHexError;
 use std::fmt::Display;
 
-use crate::error_handling::ColorParsingError;
+use crate::errors::ColorParsingError;
 
 /// This represents an RGB color, stored as it's individual color values and it's hexadecimal string
 #[derive(Clone, Copy, std::cmp::PartialEq, Debug, Hash)]

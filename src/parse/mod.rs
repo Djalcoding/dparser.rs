@@ -1,10 +1,8 @@
-use std::{fmt::Display, path::Path};
+use std::{error::Error, fmt::Display, path::Path};
 
 use crate::{
     color::Color,
-    error_handling::{
-        BoolParsingError, ColorParsingError, NumberParsingError, ParsingError, TextParsingError,
-    },
+    errors::{BoolParsingError, NumberParsingError, ParsingResult, TextParsingError},
     read::read_file,
 };
 pub struct ConfigEntry {
@@ -33,13 +31,13 @@ impl Display for ConfigEntry {
     }
 }
 
-pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingError> {
+pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingResult> {
     let block_result = read_file(path);
     let mut block = String::new();
     if let Ok(b) = block_result {
         block = b;
     } else if let Err(e) = block_result {
-        return Err(ParsingError::IOError {
+        return Err(ParsingResult::IOError {
             filepath: path.to_owned(),
             error: e,
         });
@@ -64,7 +62,7 @@ pub(crate) fn parse_file(path: &'_ Path) -> Result<Vec<ConfigEntry>, ParsingErro
         }
         let separator_index = without_comment.find(":");
         if separator_index.is_none() {
-            return Err(ParsingError::NoSeperator {
+            return Err(ParsingResult::NoSeperator {
                 filepath: path.to_owned(),
                 line: line_number,
             });
@@ -104,101 +102,115 @@ pub(crate) fn split_on_commas(array: &str) -> Vec<&str> {
     output
 }
 
-pub(crate) fn parse_color(raw: &str) -> Result<Color, ColorParsingError> {
-    let rgb = Color::from_rgb_string(raw);
-    let hexadecimal = Color::from_hexadecimal(raw);
-    let text = Color::from_color_string(raw);
-
-    if let Ok(color) = rgb {
-        Ok(color)
-    } else if let Ok(color) = hexadecimal {
-        Ok(color)
-    } else if let Ok(color) = text {
-        Ok(color)
-    } else {
-        Err(rgb.unwrap_err())
-    }
+/// Represents a type that can be constructed from a config entry
+pub trait ConfigConstructible: Sized {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>>;
 }
 
-pub(crate) fn parse_text(raw: &str) -> Result<String, TextParsingError> {
-    let mut quote_count: u16 = 0;
-    let mut first_quote: usize = 0xFFFFFFFF;
-    let mut last_quote: usize = 0x0;
+impl ConfigConstructible for bool {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>> {
+        let lower_raw = raw_data.to_lowercase();
 
-    for (i, c) in raw.chars().enumerate() {
-        if c != '"' {
-            continue;
+        let yes: bool =
+            lower_raw == "yes" || lower_raw == "y" || lower_raw == "true" || lower_raw == "1";
+        let no: bool =
+            lower_raw == "no" || lower_raw == "n" || lower_raw == "false" || lower_raw == "0";
+
+        if !no && !yes {
+            return Err(Box::new(BoolParsingError::UnknownName(raw_data.to_owned())));
         }
-        quote_count += 1;
-        first_quote = std::cmp::min(first_quote, i);
-        last_quote = std::cmp::max(last_quote, i);
+        Ok(yes)
     }
-    let trimmed: String = raw
-        .chars()
-        .enumerate()
-        .filter(|(i, _)| *i > first_quote && *i < last_quote)
-        .map(|(_, c)| c)
-        .collect();
-
-    if quote_count < 2 {
-        return Err(TextParsingError::NotEnoughDoubleQuotes(raw.to_owned()));
-    }
-    Ok(trimmed)
 }
 
-pub(crate) fn parse_number(str: &str) -> Result<f64, NumberParsingError> {
-    let mut negative: bool = false;
-    let mut number: f64 = 0.0;
-    let mut decimal_start: Option<usize> = None;
-    let mut found_first_digit: bool = false;
-    for (idx, character) in str.chars().enumerate() {
-        match character {
-            '.' => {
-                decimal_start = Some(idx);
+impl ConfigConstructible for String {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>> {
+        let mut quote_count: u16 = 0;
+        let mut first_quote: usize = 0xFFFFFFFF;
+        let mut last_quote: usize = 0x0;
+
+        for (i, c) in raw_data.chars().enumerate() {
+            if c != '"' {
+                continue;
             }
-            '-' if !found_first_digit => negative = !negative,
-            _ if !character.is_ascii_digit() => {
-                return Err(NumberParsingError::NonNumericCharacter(
-                    str.to_owned(),
-                    character,
-                ));
-            }
-            _ => {
-                found_first_digit = true;
-                let character_f64 = (character as u8 - b'0') as f64;
-                if let Some(dot_index) = decimal_start {
-                    number += character_f64 / 10f64.powf((idx - dot_index) as f64)
-                } else {
-                    number *= 10.0;
-                    number += character_f64;
-                }
+            quote_count += 1;
+            first_quote = std::cmp::min(first_quote, i);
+            last_quote = std::cmp::max(last_quote, i);
+        }
+        let trimmed: String = raw_data
+            .chars()
+            .enumerate()
+            .filter(|(i, _)| *i > first_quote && *i < last_quote)
+            .map(|(_, c)| c)
+            .collect();
+
+        if quote_count < 2 {
+            return Err(Box::from(TextParsingError::NotEnoughDoubleQuotes(
+                raw_data.to_owned(),
+            )));
+        }
+        Ok(trimmed)
+    }
+}
+
+impl ConfigConstructible for Color {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>> {
+        let rgb = Color::from_rgb_string(raw_data);
+        if let Ok(color) = rgb {
+            return Ok(color);
+        }
+        let hexadecimal = Color::from_hexadecimal(raw_data);
+        if let Ok(color) = hexadecimal {
+            return Ok(color);
+        }
+        let text = Color::from_color_string(raw_data);
+        if let Ok(color) = text {
+            return Ok(color);
+        }
+
+        Err(Box::new(rgb.unwrap_err()))
+    }
+}
+
+macro_rules! impl_for_float {
+    ($($type:ty),*) => {
+        $(
+impl ConfigConstructible for $type {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>> {
+        match raw_data.parse::<$type>() {
+            Ok(number) => {
                 if !number.is_finite() {
-                    // f64 overflows to inf
-                    return Err(NumberParsingError::TooLarge(str.to_owned()));
+                    Err(Box::from(NumberParsingError::TooLarge))
+                } else {
+                    Ok(number)
                 }
             }
+            Err(error) => Err(Box::from(error)),
         }
     }
-    Ok(number)
+}
+        )*
+    };
 }
 
-pub(crate) fn parse_bool(raw: &str) -> Result<bool, BoolParsingError> {
-    let lower_raw = raw.to_lowercase();
-
-    let yes: bool =
-        lower_raw == "yes" || lower_raw == "y" || lower_raw == "true" || lower_raw == "1";
-    let no: bool =
-        lower_raw == "no" || lower_raw == "n" || lower_raw == "false" || lower_raw == "0";
-
-    if !no && !yes {
-        return Err(BoolParsingError::UnknownName(raw.to_owned()));
+macro_rules! impl_for_integer {
+    ($($type:ty),*) => {
+        $(
+impl ConfigConstructible for $type {
+    fn parse(raw_data: &str) -> Result<Self, Box<dyn Error>> {
+        Ok(raw_data.parse::<$type>()?)
     }
-    Ok(yes)
 }
+        )*
+    };
+}
+
+impl_for_float!(f64, f32);
+impl_for_integer!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[cfg(test)]
 mod tests {
-    use crate::parse::{parse_number, split_on_commas};
+    use crate::parse::{ConfigConstructible, split_on_commas};
 
     #[test]
     fn test_split_on_commas() {
@@ -209,7 +221,15 @@ mod tests {
     }
     #[test]
     fn test_parse_number() {
-        let output = parse_number("123");
+        let output = f64::parse("123");
         assert_eq!(output.unwrap(), 123f64);
+        let output = f64::parse("123.2302");
+        assert_eq!(output.unwrap(), 123.2302f64);
+        let output = u128::parse("456");
+        assert_eq!(output.unwrap(), 456u128);
+        let output = u8::parse("255");
+        assert_eq!(output.unwrap(), 255u8);
+        let overflow = u8::parse("256");
+        assert!(overflow.is_err());
     }
 }

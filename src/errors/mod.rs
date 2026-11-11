@@ -1,8 +1,8 @@
 //! Errors that might occur while trying to parse a file
 
-use std::{error::Error, fmt::Display, path::PathBuf};
+use std::{error::Error, fmt::Display,path::PathBuf, result};
 
-use crate::error_handling::ColorParsingError::InvalidArgumentCount;
+use crate::errors::ColorParsingError::InvalidArgumentCount;
 
 /// Represents an error that might occur while parsing a file
 /// Everything is owned, so a clone operation may be necessary
@@ -22,37 +22,13 @@ pub enum ParsingResult {
     NoSeperator { filepath: PathBuf, line: usize },
     /// An error that occurs when a key is not present in a [`crate::datastructure::ParsedData`].
     NonExistantEntry(String),
-    /// An error that occurs when failing to parse a number.
-    /// Contains error location.
-    /// See [`NumberParsingError`]
-    NumberError {
-        filepath: PathBuf,
-        line: usize,
-        error: NumberParsingError,
-    },
-    /// An error that occurs when failing to parse text.
-    /// Contains error location.
-    /// See [`TextParsingError`]
-    TextError {
-        filepath: PathBuf,
-        line: usize,
-        error: TextParsingError,
-    },
-    /// An error that occurs when failing to parse a boolean.
-    /// Contains error location.
-    /// See [`BoolParsingError`]
-    BoolError {
-        filepath: PathBuf,
-        line: usize,
-        error: BoolParsingError,
-    },
     /// An error that occurs when failing to parse a color.
     /// Contains error location.
     /// See [`ColorParsingError`]
-    ColorError {
+    ParsingError {
         filepath: PathBuf,
         line: usize,
-        error: ColorParsingError,
+        error: Box<dyn Error>,
     },
     /// Wrapper for another Error to indicate that this error happends over an array
     ArrayError(Box<ParsingResult>), // Boohou heap allocation, it only happens on errors
@@ -68,12 +44,13 @@ impl ParsingResult {
             _ => Self::ArrayError(Box::new(self)),
         }
     }
-    /// Returns true if [`self`] represents an error
+    /// Returns true if [`self`]
     pub fn is_error(&self) -> bool {
         !matches!(self, Self::DefaultValueRequested)
     }
 }
 
+pub type Result<T> = result::Result<T, ParsingResult>;
 
 impl Display for ParsingResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,47 +74,14 @@ impl Display for ParsingResult {
             Self::ArrayError(error) => {
                 write!(f, "Failed to parse array : {error}")
             }
-            Self::BoolError {
+            Self::ParsingError {
                 filepath,
                 line,
                 error,
             } => {
                 write!(
                     f,
-                    "Failed to parse boolean within '{}' on line {line} : {error}",
-                    filepath.display()
-                )
-            }
-            Self::ColorError {
-                filepath,
-                line,
-                error,
-            } => {
-                write!(
-                    f,
-                    "Failed to parse color within '{}' on line {line} : {error}",
-                    filepath.display()
-                )
-            }
-            Self::NumberError {
-                filepath,
-                line,
-                error,
-            } => {
-                write!(
-                    f,
-                    "Failed to parse number within '{}' on line {line} : {error}",
-                    filepath.display()
-                )
-            }
-            Self::TextError {
-                filepath,
-                line,
-                error,
-            } => {
-                write!(
-                    f,
-                    "Failed to parse text within '{}' on line {line} : {error}",
+                    "Failed to parse entry within '{}' on line {line} : {error}",
                     filepath.display()
                 )
             }
@@ -150,22 +94,14 @@ impl Error for ParsingResult {}
 #[derive(Debug, PartialEq, Clone)]
 /// An error that describes a failure in number parsing
 pub enum NumberParsingError {
-    /// Occurs when input string cannot fit in a [`f64`]
-    TooLarge(String),
-    /// Occurs when any character in the input string fails [`char::is_ascii_digit()`]
-    NonNumericCharacter(String, char),
+    /// Occurs when input is too large for the wanted numeric output type
+    TooLarge,
 }
 impl Display for NumberParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NumberParsingError::NonNumericCharacter(raw, c) => {
-                write!(
-                    f,
-                    "Non-numeric character found while parsing '{raw}' as number : '{c}' "
-                )
-            }
-            NumberParsingError::TooLarge(raw) => {
-                write!(f, "Number '{raw}' is too large to be parsed")
+            NumberParsingError::TooLarge => {
+                write!(f, "float litteral is too large to be parsed")
             }
         }
     }
@@ -181,7 +117,10 @@ pub enum BoolParsingError {
 impl Display for BoolParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self::UnknownName(name) = self;
-        write!(f, "{name} is not a valid boolean identifier")
+        write!(
+            f,
+            "boolean couldn't be parsed : '{name}' is not a valid boolean identifier"
+        )
     }
 }
 impl Error for BoolParsingError {}
@@ -195,7 +134,10 @@ pub enum TextParsingError {
 impl Display for TextParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self::NotEnoughDoubleQuotes(name) = self;
-        write!(f, "{name} doesn't have enough double quotes to be parsed")
+        write!(
+            f,
+            "string couldn't be parsed : '{name}' doesn't have enough double quotes to be parsed"
+        )
     }
 }
 impl Error for TextParsingError {}
@@ -228,16 +170,16 @@ impl Display for ColorParsingError {
         match self {
             InvalidArgumentCount { found } => write!(
                 f,
-                "{found} arguments provided for color when 3 or 4 are expected"
+                "color couldn't be parsed : '{found}' arguments provided for color when 3 or 4 are expected"
             ),
             Self::UnknownName(name) => write!(f, "{name} is not a recognized color"),
             Self::NonNumericCharacter(raw, c) => {
                 write!(
                     f,
-                    "Non-numeric character found while parsing '{raw}' as color : {c}"
+                    "color couldn't be parsed : non-numeric character found while parsing '{raw}' as color : {c}"
                 )
             }
-            Self::Over255 => write!(f, "A value over 255 is inside rgba color"),
+            Self::Over255 => write!(f, "color couldn't be parsed : value over 255 in rgba"),
         }
     }
 }
