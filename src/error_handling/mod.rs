@@ -1,21 +1,18 @@
 //! Errors that might occur while trying to parse a file
 
-use std::{
-    error::Error,
-    fmt::Display,
-    path::{PathBuf},
-};
+use std::{error::Error, fmt::Display, path::PathBuf};
 
 use crate::error_handling::ColorParsingError::InvalidArgumentCount;
-
 
 /// Represents an error that might occur while parsing a file
 /// Everything is owned, so a clone operation may be necessary
 #[derive(Debug)]
-pub enum ParsingError {
-    // This is not a struct because I love flat girls
+pub enum ParsingResult {
+    /// Not an error, the explicit request that the default value be used
+    DefaultValueRequested,
     /// A syscall error, wrapper for [`std::io::Error`].
     /// Contains filepath.
+    // This is not a struct because I love flat girls
     IOError {
         filepath: PathBuf,
         error: std::io::Error,
@@ -58,21 +55,32 @@ pub enum ParsingError {
         error: ColorParsingError,
     },
     /// Wrapper for another Error to indicate that this error happends over an array
-    ArrayError(Box<ParsingError>), // Boohou heap allocation, it only happens on errors
+    ArrayError(Box<ParsingResult>), // Boohou heap allocation, it only happens on errors
 }
 
-impl ParsingError {
+impl ParsingResult {
     /// Wrap an error into an array error
     /// [See Also]
     /// [`ParsingError::ArrayError`]
     pub fn array_error(self) -> Self {
-        Self::ArrayError(Box::new(self))
+        match self {
+            Self::ArrayError(_) => self,
+            _ => Self::ArrayError(Box::new(self)),
+        }
+    }
+    /// Returns true if [`self`] represents an error
+    pub fn is_error(&self) -> bool {
+        !matches!(self, Self::DefaultValueRequested)
     }
 }
 
-impl Display for ParsingError {
+
+impl Display for ParsingResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::DefaultValueRequested => {
+                write!(f, "default value is requested")
+            }
             Self::NonExistantEntry(entry) => {
                 write!(f, "{entry} is not present in file")
             }
@@ -137,7 +145,7 @@ impl Display for ParsingError {
     }
 }
 
-impl Error for ParsingError {}
+impl Error for ParsingResult {}
 
 #[derive(Debug, PartialEq, Clone)]
 /// An error that describes a failure in number parsing
@@ -176,7 +184,7 @@ impl Display for BoolParsingError {
         write!(f, "{name} is not a valid boolean identifier")
     }
 }
-impl Error for BoolParsingError{}
+impl Error for BoolParsingError {}
 
 #[derive(Debug, PartialEq, Clone)]
 /// An error that describes a failure in text parsing
@@ -190,7 +198,7 @@ impl Display for TextParsingError {
         write!(f, "{name} doesn't have enough double quotes to be parsed")
     }
 }
-impl Error for TextParsingError{}
+impl Error for TextParsingError {}
 
 #[derive(Debug, PartialEq, Clone)]
 /// An error that describes a failure in color parsing
@@ -234,4 +242,4 @@ impl Display for ColorParsingError {
     }
 }
 
-impl Error for ColorParsingError{}
+impl Error for ColorParsingError {}

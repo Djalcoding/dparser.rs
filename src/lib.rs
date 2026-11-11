@@ -45,8 +45,8 @@
 //!     !! This is an array
 //!     !! Arrays are typed
 //!     string array: "Hello, ", "World"
-//!     number array: 1, 1.618, 2, 2.718, 3, 3.142 
-//!     boolean array: true, false, yes, no 
+//!     number array: 1, 1.618, 2, 2.718, 3, 3.142
+//!     boolean array: true, false, yes, no
 //!     color array: (0,255,0), transparent, #ffffff, red
 //!     raw array: I, Will, Survive
 //!```
@@ -61,18 +61,23 @@
 //! assert_eq!(parsed_data.as_text("text").unwrap(), String::from("Lorem Ipsum"));
 //! assert_eq!(parsed_data.as_text("TeXt").unwrap(), String::from("Lorem Ipsum"));
 //! ```
+
+use std::result;
+
+use crate::error_handling::ParsingResult;
 pub mod color;
 pub mod error_handling;
+pub mod macros;
 mod parse;
 mod read;
 
+/// A parsing result or a T
+pub type Result<T> = result::Result<T, ParsingResult>;
 pub mod datastructure {
     //! This module implements a data structure to easily retrieve and interpret data from a parsed
     //! text file
     use crate::{
-        color::Color,
-        error_handling::ParsingError,
-        parse::{
+        Result, color::Color, error_handling::ParsingResult, parse::{
             ConfigEntry, parse_bool, parse_color, parse_file, parse_number, parse_text,
             split_on_commas,
         },
@@ -85,7 +90,7 @@ pub mod datastructure {
     type MapKey = String;
     type MapValue = (usize, String);
     /// Data structure used to retrive and interpret data from a parsed text file
-    /// HashMap Wrapper 
+    /// HashMap Wrapper
     #[derive(Debug)]
     pub struct ParsedData<'p> {
         file: &'p Path,
@@ -101,7 +106,7 @@ pub mod datastructure {
         ///
         /// Returns a Result<ParsedData, Error>.
         /// This will result in an error if the file cannot be properly parsed.
-        pub fn from_file(path: &'p Path) -> Result<Self, ParsingError> {
+        pub fn from_file(path: &'p Path) -> Result<Self> {
             let entries: Vec<ConfigEntry> = parse_file(path)?;
             Ok(ParsedData::from_entries(path, entries))
         }
@@ -115,24 +120,27 @@ pub mod datastructure {
 
         /// Returns the raw data from a key inside of the text file, along with its line number
         /// This can also return a [`ParsingError`] if the key isn't present in the file.
-        pub fn as_raw(&self, key: &str) -> Result<(usize, &str), ParsingError> {
+        pub fn as_raw(&self, key: &str) -> Result<(usize, &str)> {
             let entry = self.map.get(&Self::standardize_key(key));
             if entry.is_none() {
-                return Err(ParsingError::NonExistantEntry(key.to_owned()));
+                return Err(ParsingResult::NonExistantEntry(key.to_owned()));
             }
-            let (line, string) = entry.as_ref().unwrap();
-            Ok((*line, string))
+            let (line_number, string) = entry.as_ref().unwrap();
+            if string == "default" {
+                return Err(ParsingResult::DefaultValueRequested);
+            }
+            Ok((*line_number, string))
         }
 
         /// Returns data interpreted as a piece of text from a key inside of the text file.
         /// This can also return a [`ParsingError`] if the key isn't present in the file or if the
         /// number of quotes is non-even
-        pub fn as_text(&self, key: &str) -> Result<String, ParsingError> {
+        pub fn as_text(&self, key: &str) -> Result<String> {
             let (line, raw) = self.as_raw(key)?;
             let parsed = parse_text(raw);
             match parsed {
                 Ok(output) => Ok(output),
-                Err(error) => Err(ParsingError::TextError {
+                Err(error) => Err(ParsingResult::TextError {
                     filepath: self.file.to_owned(),
                     line,
                     error,
@@ -143,12 +151,12 @@ pub mod datastructure {
         /// Returns data interpreted as f64 from a key inside of the text file.
         /// This can also return a [`ParsingError`] if the key isn't present in the file or if
         /// non-numeric character is inside of the value
-        pub fn as_number(&self, key: &str) -> Result<f64, ParsingError> {
+        pub fn as_number(&self, key: &str) -> Result<f64> {
             let (line, raw) = self.as_raw(key)?;
             let result = parse_number(raw);
             match result {
                 Ok(value) => Ok(value),
-                Err(e) => Err(ParsingError::NumberError {
+                Err(e) => Err(ParsingResult::NumberError {
                     filepath: self.file.to_owned(),
                     line,
                     error: e,
@@ -165,11 +173,11 @@ pub mod datastructure {
         ///   - 'no', 'n', 'false' and '0' for false.
         ///
         /// They are case insensitive
-        pub fn as_boolean(&self, key: &str) -> Result<bool, ParsingError> {
+        pub fn as_boolean(&self, key: &str) -> Result<bool> {
             let (line, raw) = self.as_raw(key)?;
             match parse_bool(raw) {
                 Ok(b) => Ok(b),
-                Err(error) => Err(ParsingError::BoolError {
+                Err(error) => Err(ParsingResult::BoolError {
                     filepath: self.file.to_owned(),
                     line,
                     error,
@@ -183,19 +191,23 @@ pub mod datastructure {
         /// name
         /// [See Also]
         /// [`Color`] for more information
-        pub fn as_color(&self, key: &str) -> Result<Color, ParsingError> {
+        pub fn as_color(&self, key: &str) -> Result<Color> {
             let (line, raw) = self.as_raw(key)?;
             let color = parse_color(raw);
             match color {
                 Ok(color) => Ok(color),
-                Err(error) => Err(ParsingError::ColorError { filepath: self.file.to_owned(), line, error }),
+                Err(error) => Err(ParsingResult::ColorError {
+                    filepath: self.file.to_owned(),
+                    line,
+                    error,
+                }),
             }
         }
 
         /// Returns data interpreted as a raw array.
         /// This can also return a [`ParsingError`] if the key isn't present in the file.
         /// This is the array-variant for [`ParsedData::as_raw()`]
-        pub fn as_raw_array(&self, key: &str) -> Result<(usize, Vec<&str>), ParsingError> {
+        pub fn as_raw_array(&self, key: &str) -> Result<(usize, Vec<&str>)> {
             let (line, raw_text) = self.as_raw(key)?;
             let splitted = split_on_commas(raw_text);
             Ok((line, splitted))
@@ -206,16 +218,17 @@ pub mod datastructure {
         /// anything in the array fails text parsing
         /// [See also]
         /// [`ParsedData::as_text()`]
-        pub fn as_text_array(&self, key: &str) -> Result<Vec<String>, ParsingError> {
+        pub fn as_text_array(&self, key: &str) -> Result<Vec<String>> {
             let (line, raw) = self.as_raw_array(key)?;
             raw.iter()
                 .map(|array_element| match parse_text(array_element) {
                     Ok(data) => Ok(data),
-                    Err(error) => Err(ParsingError::TextError {
+                    Err(error) => Err(ParsingResult::TextError {
                         filepath: self.file.to_owned(),
                         line,
                         error,
-                    }.array_error()),
+                    }
+                    .array_error()),
                 })
                 .collect()
         }
@@ -225,16 +238,17 @@ pub mod datastructure {
         /// anything in the array fails color parsing
         /// [See also]
         /// [`ParsedData::as_color()`]
-        pub fn as_color_array(&self, key: &str) -> Result<Vec<Color>, ParsingError> {
+        pub fn as_color_array(&self, key: &str) -> Result<Vec<Color>> {
             let (line, raw) = self.as_raw_array(key)?;
             raw.iter()
                 .map(|array_element| match parse_color(array_element) {
                     Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingError::ColorError {
+                    Err(error) => Err(ParsingResult::ColorError {
                         filepath: self.file.to_owned(),
                         error,
                         line,
-                    }.array_error()),
+                    }
+                    .array_error()),
                 })
                 .collect()
         }
@@ -244,16 +258,17 @@ pub mod datastructure {
         /// anything in the array fails number parsing
         /// [See also]
         /// [`ParsedData::as_number()`]
-        pub fn as_number_array(&self, key: &str) -> Result<Vec<f64>, ParsingError> {
+        pub fn as_number_array(&self, key: &str) -> Result<Vec<f64>> {
             let (line, raw) = self.as_raw_array(key)?;
             raw.iter()
                 .map(|array_element| match parse_number(array_element) {
                     Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingError::NumberError {
+                    Err(error) => Err(ParsingResult::NumberError {
                         filepath: self.file.to_owned(),
                         line,
                         error,
-                    }.array_error()),
+                    }
+                    .array_error()),
                 })
                 .collect()
         }
@@ -262,16 +277,17 @@ pub mod datastructure {
         /// anything in the array fails boolean parsing
         /// [See also]
         /// [`ParsedData::as_boolean()`]
-        pub fn as_boolean_array(&self, key: &str) -> Result<Vec<bool>, ParsingError> {
+        pub fn as_boolean_array(&self, key: &str) -> Result<Vec<bool>> {
             let (line, raw) = self.as_raw_array(key)?;
             raw.iter()
                 .map(|array_element| match parse_bool(array_element) {
                     Ok(valid_color) => Ok(valid_color),
-                    Err(error) => Err(ParsingError::BoolError{
+                    Err(error) => Err(ParsingResult::BoolError {
                         filepath: self.file.to_owned(),
                         line,
                         error,
-                    }.array_error()),
+                    }
+                    .array_error()),
                 })
                 .collect()
         }

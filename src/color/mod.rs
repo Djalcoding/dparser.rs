@@ -39,6 +39,8 @@ impl Color {
 
     /// Create a new palette [`Color`] from a name.
     /// This will result in an error if the color name isn't recognized
+    /// Note that Some colors will map to ANSI pallette entries.
+    /// Common names will be mapped to RGB
     pub fn from_color_string(string: &str) -> Result<Self, ColorParsingError> {
         let parsed: String = string.chars().filter(|c| !c.is_whitespace()).collect();
         match parsed.to_lowercase().as_str() {
@@ -58,6 +60,13 @@ impl Color {
             "brightmagenta" => Ok(Color::PALETTE(13)),
             "brightcyan" => Ok(Color::PALETTE(14)),
             "brightwhite" => Ok(Color::PALETTE(15)),
+            // Non palette colors
+            "orange" => Ok(Color::RGB(255, 165, 0)),
+            "pink" => Ok(Color::RGB(255, 105, 180)),
+            "purple" => Ok(Color::RGB(128, 0, 128)),
+            "brightorange" => Ok(Color::RGB(255, 117, 25)),
+            "brightpink" => Ok(Color::RGB(255, 0, 127)),
+            "brightpurple" => Ok(Color::RGB(180, 41, 212)),
             "transparent" | "none" => Ok(TRANSPARENT),
             _ => Err(ColorParsingError::UnknownName(string.to_owned())),
         }

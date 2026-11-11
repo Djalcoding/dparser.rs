@@ -7,5 +7,5 @@ bigArray: (1,255,100), red,#ff00ff,#ffffff
 string array: "Hello, ", "World"
 number array: 1, 1.618, 2, 2.718, 3, 3.142 
 boolean array: true, false, yes, no 
-color array: (0,255,0), transparent, #ffffff, red
+color array: (0,255,0), transparent, #ffffff, red, orange 
 raw array: I, Will, Survive
