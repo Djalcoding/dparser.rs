@@ -67,10 +67,10 @@ use std::result;
 use crate::errors::ParsingResult;
 pub mod color;
 pub mod errors;
-mod parse;
+pub mod parse;
 mod read;
 
-/// A parsing result or a T
+/// A [`ParsingResult`] or a T
 pub type Result<T> = result::Result<T, ParsingResult>;
 pub mod datastructure {
     //! This module implements a data structure to easily retrieve and interpret data from a parsed

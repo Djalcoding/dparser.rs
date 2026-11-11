@@ -5,22 +5,22 @@ use crate::{
     errors::{BoolParsingError, NumberParsingError, ParsingResult, TextParsingError},
     read::read_file,
 };
-pub struct ConfigEntry {
+pub(crate) struct ConfigEntry {
     name: String,
     content: String,
     line: usize,
 }
 
 impl ConfigEntry {
-    pub fn name(&self) -> &String {
+    pub(crate) fn name(&self) -> &String {
         &self.name
     }
 
-    pub fn content(&self) -> &String {
+    pub(crate) fn content(&self) -> &String {
         &self.content
     }
 
-    pub fn line_number(&self) -> usize {
+    pub(crate) fn line_number(&self) -> usize {
         self.line
     }
 }
